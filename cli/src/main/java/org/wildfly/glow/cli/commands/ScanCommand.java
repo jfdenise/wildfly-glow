@@ -43,8 +43,26 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import org.apache.maven.repository.internal.MavenRepositorySystemUtils;
+import org.eclipse.aether.DefaultRepositorySystemSession;
+import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.repository.LocalRepository;
+import org.eclipse.aether.repository.RemoteRepository;
 import org.jboss.as.version.Stability;
 import org.jboss.galleon.universe.maven.repo.MavenRepoManager;
+import org.jboss.galleon.api.GalleonBuilder;
+import org.jboss.galleon.api.Provisioning;
+import org.jboss.galleon.api.config.GalleonFeaturePackConfig;
+import org.jboss.galleon.api.config.GalleonProvisioningConfig;
+import org.jboss.galleon.universe.FeaturePackLocation;
+import org.wildfly.channel.Channel;
+import org.wildfly.channel.ChannelMapper;
+import org.wildfly.channel.ChannelSession;
+import org.wildfly.channel.Repository;
+import org.wildfly.channel.VersionResult;
+import org.wildfly.channel.maven.VersionResolverFactory;
+import static org.wildfly.channel.maven.VersionResolverFactory.DEFAULT_REPOSITORY_MAPPER;
 
 import static org.wildfly.glow.Arguments.CLOUD_EXECUTION_CONTEXT;
 import static org.wildfly.glow.Arguments.COMPACT_PROPERTY;
@@ -52,6 +70,7 @@ import org.wildfly.glow.Env;
 import static org.wildfly.glow.OutputFormat.BOOTABLE_JAR;
 import static org.wildfly.glow.OutputFormat.DOCKER_IMAGE;
 import static org.wildfly.glow.OutputFormat.OPENSHIFT;
+import org.wildfly.glow.maven.ChannelMavenArtifactRepositoryManager;
 
 @CommandLine.Command(
         name = Constants.SCAN_COMMAND,
@@ -141,6 +160,9 @@ public class ScanCommand extends AbstractCommand {
 
     @CommandLine.Option(names = {Constants.FAILS_ON_ERROR_OPTION_SHORT, Constants.FAILS_ON_ERROR_OPTION}, defaultValue = "true")
     Optional<Boolean> failsOnError;
+
+    @CommandLine.Option(names = {"--channel-file"}, paramLabel = "Path to channel file")
+    Optional<Path> channelsFile;
 
     @Override
     public Integer call() throws Exception {
@@ -241,7 +263,57 @@ public class ScanCommand extends AbstractCommand {
             builder.setBinaries(deployments);
         }
         if (provisioningXml.isPresent()) {
-            builder.setProvisoningXML(provisioningXml.get());
+        }
+        MavenRepoManager repoManager = null;
+        if (channelsFile.isPresent()) {
+            String content = Files.readString(channelsFile.get());
+            List<Channel> channels = ChannelMapper.fromString(content);
+            Map<String, RemoteRepository> mapping = new HashMap<>();
+            for (RemoteRepository r : MavenResolver.getEAPRepositories()) {
+                mapping.put(r.getId(), r);
+            }
+            Function<Repository, RemoteRepository> mapper = r -> {
+                RemoteRepository rep = mapping.get(r.getId());
+                if (rep == null) {
+                    rep = DEFAULT_REPOSITORY_MAPPER.apply(r);
+                }
+                return rep;
+            };
+            Path localCache = Paths.get(System.getProperty("user.home"), ".m2", "repository");
+            LocalRepository localRepo = new LocalRepository(localCache.toFile());
+            RepositorySystem repoSystem = MavenResolver.newRepositorySystem();
+            DefaultRepositorySystemSession session = MavenRepositorySystemUtils.newSession();
+            session.setLocalRepositoryManager(repoSystem.newLocalRepositoryManager(session, localRepo));
+
+            VersionResolverFactory factory = new VersionResolverFactory(repoSystem, session, mapper);
+            ChannelSession channelSession = new ChannelSession(channels, factory);
+            GalleonBuilder provider = new GalleonBuilder();
+            repoManager = new ChannelMavenArtifactRepositoryManager(channelSession);
+            provider.addArtifactResolver(repoManager);
+            Path outputFolder = Paths.get(".");
+            System.out.println("FOO1");
+            Path outputProvisioning = outputFolder.resolve("resolved-provisioning.xml");
+            try (Provisioning prov = provider.newProvisioningBuilder().build()) {
+                System.out.println("FOO2");
+                GalleonProvisioningConfig conf = prov.loadProvisioningConfig(provisioningXml.get());
+                GalleonProvisioningConfig.Builder outputConfigBuilder = GalleonProvisioningConfig.builder();
+                System.out.println("FOO3");
+                for (GalleonFeaturePackConfig dep : conf.getFeaturePackDeps()) {
+                    String[] coordinates = dep.getLocation().toString().split(":");
+                    String groupId = coordinates[0];
+                    String artifactId = coordinates[1];
+                    VersionResult res = channelSession.findLatestMavenArtifactVersion(groupId, artifactId,
+                            "zip", null, null);
+                    FeaturePackLocation loc = dep.getLocation().replaceBuild(res.getVersion());
+                    outputConfigBuilder.addFeaturePackDep(loc);
+                }
+                System.out.println("FOO4");
+                GalleonProvisioningConfig confOutput = outputConfigBuilder.build();
+                try (Provisioning provisioning = provider.newProvisioningBuilder(confOutput).build()) {
+                    provisioning.storeProvisioningConfig(confOutput, outputProvisioning);
+                }
+            }
+            builder.setProvisoningXML(outputProvisioning);
         }
         if (provision.isPresent()) {
             if (BOOTABLE_JAR.equals(provision.get()) && cloud.orElse(false)) {
@@ -281,8 +353,8 @@ public class ScanCommand extends AbstractCommand {
             }
         }
         builder.setIsCli(true);
-        MavenRepoManager directMavenResolver = MavenResolver.newMavenResolver();
-        ScanResults scanResults = GlowSession.scan(directMavenResolver, builder.build(), GlowMessageWriter.DEFAULT);
+        MavenRepoManager directMavenResolver = MavenResolver.newRHMavenResolver();
+        ScanResults scanResults = GlowSession.scan(repoManager == null ? directMavenResolver : repoManager, builder.build(), GlowMessageWriter.DEFAULT);
         scanResults.outputInformation();
         if (provision.isEmpty()) {
             if (!compact) {

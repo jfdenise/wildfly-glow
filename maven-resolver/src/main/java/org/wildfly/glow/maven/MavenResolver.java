@@ -77,11 +77,30 @@ public final class MavenResolver {
         return resolver;
     }
 
-    static RepositorySystem newRepositorySystem() {
+   public  static RepositorySystem newRepositorySystem() {
         DefaultServiceLocator locator = MavenRepositorySystemUtils.newServiceLocator();
         locator.addService(RepositoryConnectorFactory.class, BasicRepositoryConnectorFactory.class);
         locator.addService(TransporterFactory.class, FileTransporterFactory.class);
         locator.addService(TransporterFactory.class, HttpTransporterFactory.class);
         return locator.getService(RepositorySystem.class);
+    }
+
+    public static List<RemoteRepository> getEAPRepositories() {
+        RepositorySystem repoSystem = MavenResolver.newRepositorySystem();
+        DefaultRepositorySystemSession session = MavenRepositorySystemUtils.newSession();
+        String localPath = System.getProperty("maven.repo.local");
+        Path localCache = localPath == null ? Paths.get(System.getProperty("user.home"), ".m2", "repository") : Paths.get(localPath);
+        LocalRepository localRepo = new LocalRepository(localCache.toFile());
+        session.setLocalRepositoryManager(repoSystem.newLocalRepositoryManager(session, localRepo));
+        List<RemoteRepository> repos = new ArrayList<>();
+
+        RemoteRepository.Builder ga = new RemoteRepository.Builder("mrrc", "default", GA_REPO_URL);
+        ga.setSnapshotPolicy(new RepositoryPolicy(false, RepositoryPolicy.UPDATE_POLICY_NEVER,
+                RepositoryPolicy.CHECKSUM_POLICY_IGNORE));
+        repos.add(ga.build());
+//        MavenArtifactRepositoryManager resolver
+//                = new MavenArtifactRepositoryManager(repoSystem, session, repos);
+
+        return repos;
     }
 }
