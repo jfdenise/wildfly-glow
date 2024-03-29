@@ -427,6 +427,7 @@ public class OpenShiftSupport {
             ref.setName(serverImageName + ":latest");
             List<EnvVar> vars = new ArrayList<>();
             vars.add(new EnvVar().toBuilder().withName("GALLEON_USE_LOCAL_FILE").withValue("true").build());
+            vars.add(new EnvVar().toBuilder().withName("GALLEON_PROVISION_CHANNELS").withValue("org.jboss.eap.channels:eap-8.0").build());
             if (!buildExtraEnv.isEmpty()) {
                 writer.warn("\nThe following environment variables have been set in the " + serverImageName + " buildConfig:\n");
                 for (Map.Entry<String, String> entry : buildExtraEnv.entrySet()) {

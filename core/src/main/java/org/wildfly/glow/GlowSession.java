@@ -986,7 +986,8 @@ public class GlowSession {
         GalleonProvisioningConfig.Builder activeConfigBuilder = GalleonProvisioningConfig.builder();
         //List<GalleonFeaturePack> activeFPs = new ArrayList<>();
         for (FeaturePackLocation.FPID fpid : activeFeaturePacks) {
-            GalleonFeaturePackConfig.Builder fpBuilder = GalleonFeaturePackConfig.builder(fpid.getLocation());
+            FeaturePackLocation loc = fpid.getLocation().replaceBuild("");
+            GalleonFeaturePackConfig.Builder fpBuilder = GalleonFeaturePackConfig.builder(loc);
             fpBuilder.setInheritConfigs(false);
             fpBuilder.setInheritPackages(false);
             // The input config included packages is to cover some wildfly tests corner cases.
