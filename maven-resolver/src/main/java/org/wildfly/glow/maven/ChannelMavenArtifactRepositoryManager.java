@@ -135,10 +135,8 @@ public class ChannelMavenArtifactRepositoryManager implements MavenRepoManager, 
 
     @Override
     public String getLatestVersion(String groupId, String artifactId, String extension, String classifier, String baseVersion) {
-        System.out.println("RESOLVING1 " + groupId + artifactId + extension + baseVersion);
         org.wildfly.channel.MavenArtifact result = channelSession.resolveMavenArtifact(groupId,
                 artifactId, "jar", classifier, baseVersion);
-        System.out.println("RESOLVING2 " + result.getVersion());
         return result.getVersion();
     }
 
