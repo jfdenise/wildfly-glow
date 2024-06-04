@@ -56,6 +56,7 @@ import org.wildfly.glow.ConfigurationResolver;
 import static org.wildfly.glow.OutputFormat.BOOTABLE_JAR;
 import static org.wildfly.glow.OutputFormat.DOCKER_IMAGE;
 import static org.wildfly.glow.OutputFormat.OPENSHIFT;
+import static org.wildfly.glow.OutputFormat.OPENSHIFT_RESOURCES;
 import org.wildfly.glow.StabilitySupport;
 import org.wildfly.glow.cli.support.Utils;
 import org.wildfly.glow.maven.ChannelMavenArtifactRepositoryManager;
@@ -139,8 +140,11 @@ public class ScanCommand extends AbstractCommand {
     @CommandLine.Option(names = {Constants.CLI_SCRIPT_OPTION_SHORT, Constants.CLI_SCRIPT_OPTION}, paramLabel = Constants.CLI_SCRIPT_OPTION_LABEL)
     Optional<Path> cliScriptFile;
 
-    @CommandLine.Option(names = Constants.DISABLE_DEPLOYERS, split = ",", paramLabel = Constants.ADD_ONS_OPTION_LABEL)
+    @CommandLine.Option(names = Constants.DISABLE_DEPLOYERS, split = ",", paramLabel = Constants.DISABLE_DEPLOYERS_OPTION_LABEL)
     Set<String> disableDeployers = new LinkedHashSet<>();
+
+    @CommandLine.Option(names = Constants.ENABLE_DEPLOYERS, split = ",", paramLabel = Constants.ENABLE_DEPLOYERS_OPTION_LABEL)
+    Set<String> enableDeployers = new LinkedHashSet<>();
 
     @CommandLine.Option(names = {Constants.SYSTEM_PROPERTIES_OPTION_SHORT, Constants.SYSTEM_PROPERTIES_OPTION},
             split = " ", paramLabel = Constants.SYSTEM_PROPERTIES_LABEL)
@@ -152,19 +156,29 @@ public class ScanCommand extends AbstractCommand {
     @CommandLine.Option(names = {Constants.CHANNELS_OPTION_SHORT, Constants.CHANNELS_OPTION}, paramLabel = Constants.CHANNELS_OPTION_LABEL)
     Optional<Path> channelsFile;
 
+    @CommandLine.Option(names = {Constants.CONFIG_FILE_OPTION}, paramLabel = Constants.CONFIG_FILE_OPTION_LABEL)
+    Optional<Path> configFile;
+
     @Override
     public Integer call() throws Exception {
         Utils.setSystemProperties(systemProperties);
+        Map<String, String> configMap = Utils.readConfigFile(configFile.orElse(null));
         HiddenPropertiesAccessor hiddenPropertiesAccessor = new HiddenPropertiesAccessor();
         boolean compact = Boolean.parseBoolean(hiddenPropertiesAccessor.getProperty(COMPACT_PROPERTY));
         if (!compact) {
             print("Wildfly Glow is scanning...");
         }
         Builder builder = Arguments.scanBuilder();
-        if (haProfile.orElse(false)) {
-            Set<String> profiles = new HashSet<>();
-            profiles.add(Constants.HA);
+        Set<String> profiles = new HashSet<>();
+        profiles.add(Constants.HA);
+        boolean haProfileEnabled = haProfile.orElse(false);
+        if (haProfileEnabled) {
             builder.setExecutionProfiles(profiles);
+        } else {
+            haProfileEnabled = Utils.getHaFromConfig(configMap);
+            if (haProfileEnabled) {
+                builder.setExecutionProfiles(profiles);
+            }
         }
         if (!layersForJndi.isEmpty()) {
             builder.setJndiLayers(layersForJndi);
@@ -183,36 +197,41 @@ public class ScanCommand extends AbstractCommand {
                 throw new Exception(Constants.SERVER_VERSION_OPTION + "can't be set when " + Constants.CHANNELS_OPTION + " is set.");
             }
             builder.setVersion(wildflyServerVersion.get());
+        } else {
+            String vers = Utils.getServerVersionFromConfig(configMap);
+            if (vers != null) {
+                builder.setVersion(vers);
+            }
         }
         Map<String, String> extraEnv = new HashMap<>();
         Map<String, String> buildExtraEnv = new HashMap<>();
         if (envFile.isPresent()) {
             if (provision.isPresent()) {
-                if (!OPENSHIFT.equals(provision.get())) {
-                    throw new Exception("Env file is only usable when --provision=" + OPENSHIFT + " option is set.");
+                if (!OPENSHIFT.equals(provision.get()) && !OPENSHIFT_RESOURCES.equals(provision.get())) {
+                    throw new Exception("Env file is only usable when --provision=" + OPENSHIFT + "|" +OPENSHIFT_RESOURCES + " option is set.");
                 }
             } else {
-                throw new Exception("Env file is only usable when --provision=" + OPENSHIFT + " option is set.");
+                throw new Exception("Env file is only usable when --provision=" + OPENSHIFT + "|" +OPENSHIFT_RESOURCES + " option is set.");
             }
             extraEnv.putAll(Utils.handleOpenShiftEnvFile(envFile.get()));
         }
         if (buildEnvFile.isPresent()) {
             if (provision.isPresent()) {
-                if (!OPENSHIFT.equals(provision.get())) {
-                    throw new Exception("Build env file is only usable when --provision=" + OPENSHIFT + " option is set.");
+                if (!OPENSHIFT.equals(provision.get()) && !OPENSHIFT_RESOURCES.equals(provision.get())) {
+                    throw new Exception("Build env file is only usable when --provision=" + OPENSHIFT + "|" +OPENSHIFT_RESOURCES + " option is set.");
                 }
             } else {
-                throw new Exception("Build env file is only usable when --provision=" + OPENSHIFT + " option is set.");
+                throw new Exception("Build env file is only usable when --provision=" + OPENSHIFT + "|" +OPENSHIFT_RESOURCES + " option is set.");
             }
             buildExtraEnv.putAll(Utils.handleOpenShiftEnvFile(buildEnvFile.get()));
         }
         if (cliScriptFile.isPresent()) {
             if (provision.isPresent()) {
-                if (!OPENSHIFT.equals(provision.get())) {
-                    throw new Exception("CLI script file is only usable when --provision=" + OPENSHIFT + " option is set.");
+                if (!OPENSHIFT.equals(provision.get()) && !OPENSHIFT_RESOURCES.equals(provision.get())) {
+                    throw new Exception("CLI script file is only usable when --provision=" + OPENSHIFT + "|" +OPENSHIFT_RESOURCES + " option is set.");
                 }
             } else {
-                throw new Exception("CLI script file file is only usable when --provision=" + OPENSHIFT + " option is set.");
+                throw new Exception("CLI script file file is only usable when --provision=" + OPENSHIFT + "|" +OPENSHIFT_RESOURCES + " option is set.");
             }
             Path p = cliScriptFile.get();
             if (!Files.exists(p)) {
@@ -221,11 +240,11 @@ public class ScanCommand extends AbstractCommand {
         }
         if (initScriptFile.isPresent()) {
             if (provision.isPresent()) {
-                if (!OPENSHIFT.equals(provision.get())) {
-                    throw new Exception("Init script file is only usable when --provision=" + OPENSHIFT + " option is set.");
+                if (!OPENSHIFT.equals(provision.get()) && !OPENSHIFT_RESOURCES.equals(provision.get())) {
+                    throw new Exception("Init script file is only usable when --provision=" + OPENSHIFT + "|" +OPENSHIFT_RESOURCES + " option is set.");
                 }
             } else {
-                throw new Exception("Init script file file is only usable when --provision=" + OPENSHIFT + " option is set.");
+                throw new Exception("Init script file file is only usable when --provision=" + OPENSHIFT + "|" +OPENSHIFT_RESOURCES + " option is set.");
             }
             Path p = initScriptFile.get();
             if (!Files.exists(p)) {
@@ -233,6 +252,7 @@ public class ScanCommand extends AbstractCommand {
             }
         }
         builder.setVerbose(verbose);
+        Utils.addAddOnsFromConfig(configMap, addOns);
         if (!addOns.isEmpty()) {
             builder.setUserEnabledAddOns(addOns);
         }
@@ -259,7 +279,7 @@ public class ScanCommand extends AbstractCommand {
             if (DOCKER_IMAGE.equals(provision.get()) && !cloud.orElse(false)) {
                 cloud = Optional.of(Boolean.TRUE);
             }
-            if (OPENSHIFT.equals(provision.get()) && !cloud.orElse(false)) {
+            if (OPENSHIFT.equals(provision.get()) || OPENSHIFT_RESOURCES.equals(provision.get()) && !cloud.orElse(false)) {
                cloud = Optional.of(Boolean.TRUE);
             }
             builder.setOutput(provision.get());
@@ -298,11 +318,13 @@ public class ScanCommand extends AbstractCommand {
                 throw new Exception("Can only set a docker image name when provisioning a docker image. Remove the " + Constants.DOCKER_IMAGE_NAME_OPTION + " option");
             }
         }
+        Utils.addDisableDeployersFromConfig(configMap, disableDeployers);
+        Utils.addEnableDeployersFromConfig(configMap, enableDeployers);
         builder.setIsCli(true);
         MavenRepoManager directMavenResolver = MavenResolver.newMavenResolver();
         ScanResults scanResults = GlowSession.scan(repoManager == null ? directMavenResolver : repoManager, builder.build(), GlowMessageWriter.DEFAULT);
-        ConfigurationResolver configurationResolver = new CLIConfigurationResolver((provision.isPresent() && provision.get().equals(OPENSHIFT)),
-                disableDeployers);
+        ConfigurationResolver configurationResolver = new CLIConfigurationResolver((provision.isPresent() && (provision.get().equals(OPENSHIFT) || provision.get().equals(OPENSHIFT_RESOURCES))),
+                disableDeployers, enableDeployers);
         scanResults.outputInformation(configurationResolver);
         if (provision.isEmpty()) {
             if (!compact) {
@@ -366,6 +388,10 @@ public class ScanCommand extends AbstractCommand {
                     print("@|bold Openshift build and deploy...|@");
                     break;
                 }
+                case OPENSHIFT_RESOURCES: {
+                    print("@|bold Openshift resources generation...|@");
+                    break;
+                }
             }
             OutputContent content = scanResults.outputConfig(target, dockerImageName.orElse(null));
             Path base = Paths.get("").toAbsolutePath();
@@ -422,21 +448,22 @@ public class ScanCommand extends AbstractCommand {
                     }
                 }
             }
-            if (OutputFormat.OPENSHIFT.equals(provision.get())) {
+            if (OutputFormat.OPENSHIFT.equals(provision.get()) || OutputFormat.OPENSHIFT_RESOURCES.equals(provision.get())) {
                 OpenShiftSupport.deploy(deployments,
                         GlowMessageWriter.DEFAULT,
                         target,
                         scanResults,
-                        haProfile.orElse(false),
+                        haProfileEnabled,
                         extraEnv,
                         buildExtraEnv,
                         disableDeployers,
+                        enableDeployers,
                         initScriptFile.orElse(null),
                         cliScriptFile.orElse(null),
                         new OpenShiftConfiguration.Builder().build(),
                         directMavenResolver,
                         userSetConfigStability,
-                        Collections.emptyMap());
+                        Collections.emptyMap(), OutputFormat.OPENSHIFT_RESOURCES.equals(provision.get()));
                 print("@|bold \nOpenshift build and deploy DONE.|@");
             } else {
                 if (content.getDockerImageName() != null) {
