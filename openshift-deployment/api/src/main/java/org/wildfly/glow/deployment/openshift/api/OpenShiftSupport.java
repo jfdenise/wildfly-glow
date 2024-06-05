@@ -39,8 +39,11 @@ import io.fabric8.kubernetes.client.dsl.NonDeletingOperation;
 import io.fabric8.openshift.api.model.Build;
 import io.fabric8.openshift.api.model.BuildConfig;
 import io.fabric8.openshift.api.model.BuildConfigBuilder;
+import io.fabric8.openshift.api.model.BuildTriggerPolicy;
+import io.fabric8.openshift.api.model.BuildTriggerPolicyBuilder;
 import io.fabric8.openshift.api.model.GitBuildSource;
 import io.fabric8.openshift.api.model.GitBuildSourceBuilder;
+import io.fabric8.openshift.api.model.ImageChangeTriggerBuilder;
 import io.fabric8.openshift.api.model.ImageLookupPolicy;
 import io.fabric8.openshift.api.model.ImageSource;
 import io.fabric8.openshift.api.model.ImageSourceBuilder;
@@ -135,13 +138,23 @@ public class OpenShiftSupport {
         }
     }
 
+    private static String getGitURI() {
+        return System.getProperty("org.wildfly.glow.openshift.git.uri", "WILDFLY_GLOW_GIT_URI");
+    }
+
+    private static String getGitRef() {
+        return System.getProperty("org.wildfly.glow.openshift.git.ref", "WILDFLY_GLOW_GIT_REF");
+    }
+
     private static void createAppDeployment(GlowMessageWriter writer, Path target,
-            OpenShiftClient osClient, String name, Map<String, String> env, boolean ha, OpenShiftConfiguration config, String deploymentKind) throws Exception {
+            OpenShiftClient osClient, String name, Map<String, String> env, boolean ha,
+            OpenShiftConfiguration config,
+            String deploymentKind) throws Exception {
         Yaml yaml = new Yaml();
         Map<String, Object> helm = new HashMap<>();
         Map<String, Object> build = new HashMap<>();
-        build.put("uri", "WILDFLY_GLOW_GIT_URI");
-        build.put("ref", "WILDFLY_GLOW_GIT_REF");
+        build.put("uri", getGitURI());
+        build.put("ref", getGitRef());
         build.put("mode", "s2i");
         List<Map<String, String>> buildEnvList = new ArrayList<>();
         Map<String, String> localFile = new HashMap<>();
@@ -719,7 +732,10 @@ public class OpenShiftSupport {
             }
         }
         vars.add(new EnvVar().toBuilder().withName("GALLEON_USE_LOCAL_FILE").withValue("true").build());
-        GitBuildSource git = new GitBuildSourceBuilder().withUri("WILDFLY_GLOW_GIT_URI").withRef("WILDFLY_GLOW_GIT_REF").build();
+        GitBuildSource git = new GitBuildSourceBuilder().withUri(getGitURI()).withRef(getGitRef()).build();
+        BuildTriggerPolicy configChange = new BuildTriggerPolicyBuilder().withType("ConfigChange").build();
+        List<BuildTriggerPolicy> triggers = new ArrayList<>();
+        triggers.add(configChange);
         BuildConfig buildConfig = builder.
                 withNewMetadata().withLabels(createCommonLabels(config)).withName(serverImageName + "-build").endMetadata().withNewSpec().
                 withNewOutput().
@@ -731,7 +747,7 @@ public class OpenShiftSupport {
                 withIncremental(true).
                 withEnv(vars).
                 endSourceStrategy().endStrategy().withNewSource().
-                withType("Git").withGit(git).endSource().endSpec().build();
+                withType("Git").withGit(git).endSource().withTriggers(triggers).endSpec().build();
         Utils.persistResource(target, buildConfig, serverImageName + "-build-config.yaml");
         return serverImageName;
     }
@@ -787,6 +803,15 @@ public class OpenShiftSupport {
         ImageSourcePath srcPath = new ImageSourcePathBuilder().withSourcePath("/opt/server").withDestinationDir(".").build();
         ImageSource imageSource = new ImageSourceBuilder().withFrom(ref).withPaths(srcPath).build();
         if (osClient == null) {
+            ObjectReference from = new ObjectReference();
+            from.setKind("ImageStreamTag");
+            from.setName(serverImageName+":latest");
+            BuildTriggerPolicy imageChange = new BuildTriggerPolicyBuilder().withType("ImageChange").
+                    withImageChange(new ImageChangeTriggerBuilder().withFrom(from).build()).build();
+            BuildTriggerPolicy configChange = new BuildTriggerPolicyBuilder().withType("ConfigChange").build();
+            List<BuildTriggerPolicy> triggers = new ArrayList<>();
+            triggers.add(imageChange);
+            triggers.add(configChange);
             BuildConfig buildConfig2 = builder.
                     withNewMetadata().withLabels(createCommonLabels(config)).withName(name + "-build").endMetadata().withNewSpec().
                     withNewOutput().
@@ -799,6 +824,7 @@ public class OpenShiftSupport {
                     endDockerStrategy().endStrategy().
                     withNewSource().withType("Dockerfile").withDockerfile(dockerFileBuilder.toString()).
                     withImages(imageSource).endSource().
+                    withTriggers(triggers).
                     endSpec().build();
             Utils.persistResource(target, buildConfig2, name + "-build-config.yaml");
         } else {
