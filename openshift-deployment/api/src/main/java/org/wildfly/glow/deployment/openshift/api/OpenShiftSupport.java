@@ -467,7 +467,7 @@ public class OpenShiftSupport {
         Utils.persistResource(target, route, appName + "-route.yaml");
         String host = null;
         if(osClient != null) {
-            osClient.routes().resource(route).get().getSpec().getHost();
+            host = osClient.routes().resource(route).get().getSpec().getHost();
         }
         // Done route creation
 
@@ -561,9 +561,23 @@ public class OpenShiftSupport {
         }
     }
 
-    private static boolean packageInitScript(Path initScript, Path cliScript, Path target) throws Exception {
+    private static boolean packageInitScript(Path initScript, Path cliScript, Path target, boolean dryRun) throws Exception {
         if (initScript != null || cliScript != null) {
             Path extensions = target.resolve("extensions");
+            // In dryRun, we rely on s2i extensions to be installed during nominal s2i build.
+            if (dryRun) {
+                Path s2iDir = target.resolve(".s2i");
+                Path s2iEnvFile = s2iDir.resolve("environment");
+                Files.createDirectory(s2iDir);
+                Files.write(s2iEnvFile, "CUSTOM_INSTALL_DIRECTORIES=extensions".getBytes());
+                Files.createDirectories(extensions);
+                StringBuilder installExecution = new StringBuilder();
+                installExecution.append("#!/bin/bash").append("\n");
+                installExecution.append("cp -r ./extensions $JBOSS_HOME");
+                Path install = extensions.resolve("install.sh");
+                Files.write(install, installExecution.toString().getBytes());
+                extensions = extensions.resolve("extensions");
+            }
             Files.createDirectories(extensions);
             StringBuilder initExecution = new StringBuilder();
             initExecution.append("#!/bin/bash").append("\n");
@@ -789,9 +803,11 @@ public class OpenShiftSupport {
         if (osClient != null) {
             dockerFileBuilder.append("COPY --chown=jboss:root deployments/* $JBOSS_HOME/standalone/deployments\n");
         }
-        if (packageInitScript(initScript, cliScript, stepTwo)) {
-            dockerFileBuilder.append("COPY --chown=jboss:root extensions $JBOSS_HOME/extensions\n");
-            dockerFileBuilder.append("RUN chmod ug+rwx $JBOSS_HOME/extensions/postconfigure.sh\n");
+        if (packageInitScript(initScript, cliScript, stepTwo, osClient == null)) {
+            if (osClient != null) {
+                dockerFileBuilder.append("COPY --chown=jboss:root extensions $JBOSS_HOME/extensions\n");
+                dockerFileBuilder.append("RUN chmod ug+rwx $JBOSS_HOME/extensions/postconfigure.sh\n");
+            }
         }
 
         dockerFileBuilder.append("RUN chmod -R ug+rwX $JBOSS_HOME\n");
