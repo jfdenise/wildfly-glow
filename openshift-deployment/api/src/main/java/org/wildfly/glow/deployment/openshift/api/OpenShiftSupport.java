@@ -391,6 +391,14 @@ public class OpenShiftSupport {
         return val;
     }
 
+    private static String getAppName() {
+        String name = System.getProperty("org.wildfly.glow.openshift.app.name", "");
+        if (!name.isEmpty()) {
+            name = generateValidName(name);
+        }
+        return name;
+    }
+
     public static void deploy(List<Path> deployments,
             GlowMessageWriter writer,
             Path target,
@@ -408,7 +416,7 @@ public class OpenShiftSupport {
         Set<Layer> layers = scanResults.getDiscoveredLayers();
         Set<Layer> metadataOnlyLayers = scanResults.getMetadataOnlyLayers();
         Map<Layer, Set<Env>> requiredBuildTime = scanResults.getSuggestions().getBuildTimeRequiredConfigurations();
-        String appName = "";
+        String appName = getAppName();
         String originalAppName = null;
         if (deployments != null && !deployments.isEmpty()) {
             Path deploymentsDir = target.resolve("deployments");
@@ -416,11 +424,13 @@ public class OpenShiftSupport {
             for (Path p : deployments) {
                 Files.copy(p, deploymentsDir.resolve(p.getFileName()));
                 int ext = p.getFileName().toString().lastIndexOf(".");
-                appName += p.getFileName().toString().substring(0, ext);
-                if (originalAppName == null) {
-                    originalAppName = appName;
+                if (appName == null || appName.isEmpty()) {
+                    appName += p.getFileName().toString().substring(0, ext);
+                    appName = generateValidName(appName);
                 }
-                appName = generateValidName(appName);
+                if (originalAppName == null) {
+                    originalAppName = p.getFileName().toString().substring(0, ext);
+                }
             }
         } else {
             throw new Exception("No application to deploy to OpenShift");
