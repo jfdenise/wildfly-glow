@@ -757,7 +757,9 @@ public class OpenShiftSupport {
                 withIncremental(true).
                 withEnv(vars).
                 endSourceStrategy().endStrategy().withNewSource().
-                withType("Git").withGit(git).endSource().withTriggers(triggers).endSpec().build();
+                withType("Git").withGit(git).endSource().
+                //withTriggers(triggers).
+                endSpec().build();
         Utils.persistResource(target, buildConfig, serverImageName + "-build-config.yaml");
         return serverImageName;
     }
@@ -834,7 +836,7 @@ public class OpenShiftSupport {
                     endDockerStrategy().endStrategy().
                     withNewSource().withType("Dockerfile").withDockerfile(dockerFileBuilder.toString()).
                     withImages(imageSource).endSource().
-                    withTriggers(triggers).
+                    //withTriggers(triggers).
                     endSpec().build();
             Utils.persistResource(target, buildConfig2, name + "-build-config.yaml");
         } else {
