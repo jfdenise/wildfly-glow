@@ -573,7 +573,8 @@ public class OpenShiftSupport {
                 Files.createDirectories(extensions);
                 StringBuilder installExecution = new StringBuilder();
                 installExecution.append("#!/bin/bash").append("\n");
-                installExecution.append("cp -r ./extensions $JBOSS_HOME");
+                installExecution.append("injected_dir=$1\n");
+                installExecution.append("cp -r $injected_dir/extensions $JBOSS_HOME");
                 Path install = extensions.resolve("install.sh");
                 Files.write(install, installExecution.toString().getBytes());
                 extensions = extensions.resolve("extensions");
