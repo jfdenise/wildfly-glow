@@ -35,6 +35,9 @@ public interface Constants {
     String CHANNELS_OPTION = "--channels";
     String CHANNELS_OPTION_SHORT = "-cc";
     String CHANNELS_OPTION_LABEL = "<Channels yaml file path>";
+    String CLI_CONFIG_FILE_OPTION_LABEL = "<Path to the CLI configuration file>";
+    String CLI_CONFIG_FILE_OPTION = "--cli-config-file";
+    String CLI_CONFIG_FILE_OPTION_SHORT = "-ccf";
     String CLI_SCRIPT_OPTION = "--cli-script";
     String CLI_SCRIPT_OPTION_SHORT = "-cs";
     String CLI_SCRIPT_OPTION_LABEL = "<CLI script file path>";

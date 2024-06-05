@@ -153,9 +153,13 @@ public class ScanCommand extends AbstractCommand {
     @CommandLine.Option(names = {Constants.CHANNELS_OPTION_SHORT, Constants.CHANNELS_OPTION}, paramLabel = Constants.CHANNELS_OPTION_LABEL)
     Optional<Path> channelsFile;
 
+    @CommandLine.Option(names = {Constants.CLI_CONFIG_FILE_OPTION_SHORT, Constants.CLI_CONFIG_FILE_OPTION}, paramLabel = Constants.CLI_CONFIG_FILE_OPTION_LABEL)
+    Optional<Path> configFile;
+
     @Override
     public Integer call() throws Exception {
         Utils.setSystemProperties(systemProperties);
+        Map<String, String> configMap = Utils.readConfigFile(configFile.orElse(null));
         HiddenPropertiesAccessor hiddenPropertiesAccessor = new HiddenPropertiesAccessor();
         boolean compact = Boolean.parseBoolean(hiddenPropertiesAccessor.getProperty(COMPACT_PROPERTY));
         if (!compact) {
@@ -234,6 +238,7 @@ public class ScanCommand extends AbstractCommand {
             }
         }
         builder.setVerbose(verbose);
+        Utils.addAddOnsFromConfig(configMap, addOns);
         if (!addOns.isEmpty()) {
             builder.setUserEnabledAddOns(addOns);
         }

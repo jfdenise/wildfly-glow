@@ -260,7 +260,11 @@ public class OpenShiftSupport {
 
         Map<String, String> labels = createCommonLabels(config);
         labels.putAll(matchLabels);
-        writer.info("\nWaiting until the application " + deploymentKind + " is ready ...");
+        if (osClient == null) {
+            writer.info("\nOpenShift resources have been generated.");
+        } else {
+            writer.info("\nWaiting until the application " + deploymentKind + " is ready ...");
+        }
         if (ha) {
             StatefulSet deployment = new StatefulSetBuilder().withNewMetadata().withLabels(labels).withName(name).endMetadata().
                     withNewSpec().withReplicas(ha ? 2 : 1).
