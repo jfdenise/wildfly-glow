@@ -134,7 +134,7 @@ public class AbstractDatabaseDeployer implements Deployer {
         if (!dryRun) {
             osClient.resources(Deployment.class).resource(deployment).createOr(NonDeletingOperation::update);
         }
-        Utils.persistResource(target, deployment, dbName + "-deployment.yaml");
+        Utils.persistResource(OpenShiftSupport.getDeployersDirectory(target), deployment, dbName + "-deployment.yaml");
         IntOrString v = new IntOrString();
         v.setValue(this.port);
         Service service = new ServiceBuilder().withNewMetadata().withName(dbName).endMetadata().
@@ -144,7 +144,7 @@ public class AbstractDatabaseDeployer implements Deployer {
         if (!dryRun) {
             osClient.services().resource(service).createOr(NonDeletingOperation::update);
         }
-        Utils.persistResource(target, service, dbName + "-service.yaml");
+        Utils.persistResource(OpenShiftSupport.getDeployersDirectory(target), service, dbName + "-service.yaml");
         Map<String, String> ret = new HashMap<>();
         ret.putAll(getExistingEnv(env));
         ret.putAll(APP_MAP);

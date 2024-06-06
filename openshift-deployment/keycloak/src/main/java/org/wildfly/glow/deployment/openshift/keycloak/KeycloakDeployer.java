@@ -35,6 +35,7 @@ import java.util.concurrent.TimeUnit;
 import org.wildfly.glow.Env;
 import org.wildfly.glow.GlowMessageWriter;
 import org.wildfly.glow.deployment.openshift.api.Deployer;
+import org.wildfly.glow.deployment.openshift.api.OpenShiftSupport;
 import org.wildfly.glow.deployment.openshift.api.Utils;
 
 /**
@@ -106,7 +107,7 @@ public class KeycloakDeployer implements Deployer {
         if (!dryRun) {
             osClient.resourceList(processedTemplateWithCustomParameters).createOrReplace();
         }
-        Utils.persistResource(target, processedTemplateWithCustomParameters, KEYCLOAK_NAME + "-resources.yaml");
+        Utils.persistResource(OpenShiftSupport.getDeployersDirectory(target), processedTemplateWithCustomParameters, KEYCLOAK_NAME + "-resources.yaml");
         writer.info("Waiting until keycloak is ready ...");
         DeploymentConfig dc = new DeploymentConfigBuilder().withNewMetadata().withName(KEYCLOAK_NAME).endMetadata().build();
         if (!dryRun) {

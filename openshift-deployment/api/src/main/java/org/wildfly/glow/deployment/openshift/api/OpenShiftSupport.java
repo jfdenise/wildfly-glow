@@ -56,18 +56,20 @@ import io.fabric8.openshift.api.model.RouteBuilder;
 import io.fabric8.openshift.api.model.RouteTargetReference;
 import io.fabric8.openshift.api.model.TLSConfig;
 import io.fabric8.openshift.client.OpenShiftClient;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Properties;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.TreeMap;
@@ -93,6 +95,9 @@ import org.yaml.snakeyaml.Yaml;
  * @author jdenise
  */
 public class OpenShiftSupport {
+    private static final String DEPLOYMENT_RESOURCE_DIR = "deployment";
+    private static final String BUILD_RESOURCE_DIR = "build";
+    private static final String DEPLOYERS_RESOURCE_DIR = "deployers";
 
     private static class BuildWatcher implements Watcher<Build>, AutoCloseable {
 
@@ -138,6 +143,24 @@ public class OpenShiftSupport {
         }
     }
 
+    public static Path getDeploymentDirectory(Path target) throws IOException {
+        return createResourcesDirectory(target, DEPLOYMENT_RESOURCE_DIR);
+    }
+
+    public static Path getBuildDirectory(Path target) throws IOException {
+        return createResourcesDirectory(target, BUILD_RESOURCE_DIR);
+    }
+
+    public static Path getDeployersDirectory(Path target) throws IOException {
+        return createResourcesDirectory(target, DEPLOYERS_RESOURCE_DIR);
+    }
+
+    private static Path createResourcesDirectory(Path path, String name) throws IOException {
+        Path dir = path.resolve("resources").resolve(name);
+        Files.createDirectories(dir);
+        return dir;
+    }
+
     private static String getGitURI() {
         return System.getProperty("org.wildfly.glow.openshift.git.uri", "WILDFLY_GLOW_GIT_URI");
     }
@@ -180,7 +203,7 @@ public class OpenShiftSupport {
             osClient.services().resource(service).createOr(NonDeletingOperation::update);
         }
 
-        Utils.persistResource(target, service, name + "-service.yaml");
+        Utils.persistResource(getDeploymentDirectory(target), service, name + "-service.yaml");
 
         ContainerPort port = new ContainerPort();
         port.setContainerPort(8080);
@@ -222,7 +245,7 @@ public class OpenShiftSupport {
             if (osClient != null) {
                 osClient.services().resource(pingService).createOr(NonDeletingOperation::update);
             }
-            Utils.persistResource(target, pingService, name + "-ping-service.yaml");
+            Utils.persistResource(getDeploymentDirectory(target), pingService, name + "-ping-service.yaml");
         }
         Container container = new Container();
         container.setName(name);
@@ -275,7 +298,7 @@ public class OpenShiftSupport {
             if (osClient != null) {
                 osClient.resources(StatefulSet.class).resource(deployment).createOr(NonDeletingOperation::update);
             }
-            Utils.persistResource(target, deployment, name + "-statefulset.yaml");
+            Utils.persistResource(getDeploymentDirectory(target), deployment, name + "-statefulset.yaml");
             if (osClient != null) {
                 osClient.resources(StatefulSet.class).resource(deployment).waitUntilReady(5, TimeUnit.MINUTES);
             }
@@ -289,7 +312,7 @@ public class OpenShiftSupport {
             if (osClient != null) {
                 osClient.resources(Deployment.class).resource(deployment).createOr(NonDeletingOperation::update);
             }
-            Utils.persistResource(target, deployment, name + "-deployment.yaml");
+            Utils.persistResource(getDeploymentDirectory(target), deployment, name + "-deployment.yaml");
             if (osClient != null) {
                 osClient.resources(Deployment.class).resource(deployment).waitUntilReady(5, TimeUnit.MINUTES);
             }
@@ -327,23 +350,29 @@ public class OpenShiftSupport {
     }
 
     private static List<Deployer> getEnabledDeployers(Set<String> disabledDeployers) throws Exception {
-        Map<String, Deployer> existingDeployers = new HashMap<>();
+        List<Deployer> existingDeployers = getAllDeployers(disabledDeployers);
+        List<Deployer> deployers = new ArrayList<>();
+        for (Deployer d : existingDeployers) {
+            boolean isDisabled = isDisabled(d.getName(), disabledDeployers);
+            if (!isDisabled) {
+                deployers.add(d);
+            }
+        }
+        return deployers;
+    }
 
+    private static List<Deployer> getAllDeployers(Set<String> disabledDeployers) throws Exception {
+        Map<String, Deployer> existingDeployers = new HashMap<>();
+        List<Deployer> deployers = new ArrayList<>();
         for (Deployer d : ServiceLoader.load(Deployer.class)) {
             existingDeployers.put(d.getName(), d);
+            deployers.add(d);
         }
         for (String disabled : disabledDeployers) {
             if (!"ALL".equals(disabled)) {
                 if (!existingDeployers.containsKey(disabled)) {
                     throw new Exception("Invalid deployer to disable: " + disabled);
                 }
-            }
-        }
-        List<Deployer> deployers = new ArrayList<>();
-        for (Deployer d : existingDeployers.values()) {
-            boolean isDisabled = isDisabled(d.getName(), disabledDeployers);
-            if (!isDisabled) {
-                deployers.add(d);
             }
         }
         return deployers;
@@ -464,14 +493,14 @@ public class OpenShiftSupport {
         if (osClient != null) {
             osClient.routes().resource(route).createOr(NonDeletingOperation::update);
         }
-        Utils.persistResource(target, route, appName + "-route.yaml");
+        Utils.persistResource(getDeploymentDirectory(target), route, appName + "-route.yaml");
         String host = null;
         if(osClient != null) {
             host = osClient.routes().resource(route).get().getSpec().getHost();
         }
         // Done route creation
 
-        List<Deployer> deployers = getEnabledDeployers(disabledDeployers);
+        List<Deployer> deployers = getAllDeployers(disabledDeployers);
         for (Deployer d : deployers) {
             boolean isDisabled = isDisabled(d.getName(), disabledDeployers);
             for (Layer l : allLayers) {
@@ -481,7 +510,7 @@ public class OpenShiftSupport {
                     } else {
                         writer.warn("\nThe deployer " + d.getName() + " has been disabled");
                     }
-                    actualEnv.putAll(isDisabled ? Collections.emptyMap() : d.deploy(writer, target, osClient, env, host, appName, l.getName(), extraEnv, dryRun));
+                    actualEnv.putAll(isDisabled ? d.disabledDeploy(host, appName, host, env) : d.deploy(writer, target, osClient, env, host, appName, l.getName(), extraEnv, dryRun));
                     Set<Env> buildEnv = requiredBuildTime.get(l);
                     if (buildEnv != null) {
                         Set<String> names = new HashSet<>();
@@ -553,11 +582,16 @@ public class OpenShiftSupport {
             OpenShiftConfiguration config,
             Map<String, String> serverImageBuildLabels) throws Exception {
         if (osClient == null) {
-            String serverImageName = generateBuilderBuildConfig(writer, target, buildExtraEnv, config, serverImageBuildLabels, name);
-            doAppImageBuild(serverImageName, writer, target, osClient, name, initScript, cliScript, config);
+            Properties properties = new Properties();
+            String serverImageName = generateBuilderBuildConfig(writer, target, buildExtraEnv, config, serverImageBuildLabels, name, properties);
+            doAppImageBuild(serverImageName, writer, target, osClient, name, initScript, cliScript, config, properties);
+            Path props = getBuildDirectory(target).resolve("build.properties");
+            try (FileOutputStream stream = new FileOutputStream(props.toFile())) {
+                properties.store(stream, "Build names");
+            }
         } else {
             String serverImageName = doServerImageBuild(writer, target, osClient, buildExtraEnv, config, serverImageBuildLabels);
-            doAppImageBuild(serverImageName, writer, target, osClient, name, initScript, cliScript, config);
+            doAppImageBuild(serverImageName, writer, target, osClient, name, initScript, cliScript, config, null);
         }
     }
 
@@ -695,7 +729,7 @@ public class OpenShiftSupport {
             ZipUtils.zip(stepOne, file);
             stream = stream.toBuilder().editOrNewMetadata().withLabels(createServerImageLabels(target, provisioning, config, serverImageBuildLabels)).endMetadata().build();
             osClient.imageStreams().resource(stream).createOr(NonDeletingOperation::update);
-            Utils.persistResource(target, stream, serverImageName + "-image-stream.yaml");
+            Utils.persistResource(getBuildDirectory(target), stream, serverImageName + "-image-stream.yaml");
             BuildConfigBuilder builder = new BuildConfigBuilder();
             ObjectReference ref = new ObjectReference();
             ref.setKind("ImageStreamTag");
@@ -723,7 +757,7 @@ public class OpenShiftSupport {
                     endSourceStrategy().endStrategy().withNewSource().
                     withType("Binary").endSource().endSpec().build();
             osClient.buildConfigs().resource(buildConfig).createOr(NonDeletingOperation::update);
-            Utils.persistResource(target, buildConfig, serverImageName + "-build-config.yaml");
+            Utils.persistResource(getBuildDirectory(target), buildConfig, serverImageName + "-build-config.yaml");
 
             Build build = osClient.buildConfigs().withName(serverImageName + "-build").instantiateBinary().fromFile(file.toFile());
             BuildWatcher buildWatcher = new BuildWatcher(writer);
@@ -741,12 +775,12 @@ public class OpenShiftSupport {
     private static String generateBuilderBuildConfig(GlowMessageWriter writer, Path target,
             Map<String, String> buildExtraEnv,
             OpenShiftConfiguration config,
-            Map<String, String> serverImageBuildLabels, String appName) throws Exception {
+            Map<String, String> serverImageBuildLabels, String appName, Properties properties) throws Exception {
         String serverImageName = appName + "-build-artifacts";
 
         ImageStream stream = new ImageStreamBuilder().withNewMetadata().withLabels(createCommonLabels(config)).withName(serverImageName).
                 endMetadata().withNewSpec().withLookupPolicy(new ImageLookupPolicy(Boolean.TRUE)).endSpec().build();
-        Utils.persistResource(target, stream, serverImageName + "-image-stream.yaml");
+        Utils.persistResource(getBuildDirectory(target), stream, serverImageName + "-image-stream.yaml");
         BuildConfigBuilder builder = new BuildConfigBuilder();
         ObjectReference ref = new ObjectReference();
         ref.setKind("ImageStreamTag");
@@ -765,8 +799,9 @@ public class OpenShiftSupport {
         BuildTriggerPolicy configChange = new BuildTriggerPolicyBuilder().withType("ConfigChange").build();
         List<BuildTriggerPolicy> triggers = new ArrayList<>();
         triggers.add(configChange);
+        String buildConfigName = serverImageName + "-build";
         BuildConfig buildConfig = builder.
-                withNewMetadata().withLabels(createCommonLabels(config)).withName(serverImageName + "-build").endMetadata().withNewSpec().
+                withNewMetadata().withLabels(createCommonLabels(config)).withName(buildConfigName).endMetadata().withNewSpec().
                 withNewOutput().
                 withNewTo().
                 withKind("ImageStreamTag").
@@ -779,7 +814,8 @@ public class OpenShiftSupport {
                 withType("Git").withGit(git).endSource().
                 //withTriggers(triggers).
                 endSpec().build();
-        Utils.persistResource(target, buildConfig, serverImageName + "-build-config.yaml");
+        properties.setProperty("builder", buildConfigName);
+        Utils.persistResource(getBuildDirectory(target), buildConfig, serverImageName + "-build-config.yaml");
         return serverImageName;
     }
 
@@ -790,7 +826,7 @@ public class OpenShiftSupport {
             String name,
             Path initScript,
             Path cliScript,
-            OpenShiftConfiguration config) throws Exception {
+            OpenShiftConfiguration config, Properties properties) throws Exception {
         // Now step 2
         // From the server image, do a docker build, copy the server and copy in it the deployments and init file.
         Path stepTwo = target;
@@ -828,7 +864,7 @@ public class OpenShiftSupport {
         if (osClient != null) {
             osClient.imageStreams().resource(appStream).createOr(NonDeletingOperation::update);
         }
-        Utils.persistResource(target, appStream, name + "-image-stream.yaml");
+        Utils.persistResource(getBuildDirectory(target), appStream, name + "-image-stream.yaml");
         BuildConfigBuilder builder = new BuildConfigBuilder();
         ObjectReference ref = new ObjectReference();
         ref.setKind("ImageStreamTag");
@@ -845,8 +881,9 @@ public class OpenShiftSupport {
             List<BuildTriggerPolicy> triggers = new ArrayList<>();
             triggers.add(imageChange);
             triggers.add(configChange);
+            String buildConfigName = name + "-build";
             BuildConfig buildConfig2 = builder.
-                    withNewMetadata().withLabels(createCommonLabels(config)).withName(name + "-build").endMetadata().withNewSpec().
+                    withNewMetadata().withLabels(createCommonLabels(config)).withName(buildConfigName).endMetadata().withNewSpec().
                     withNewOutput().
                     withNewTo().
                     withKind("ImageStreamTag").
@@ -859,7 +896,8 @@ public class OpenShiftSupport {
                     withImages(imageSource).endSource().
                     //withTriggers(triggers).
                     endSpec().build();
-            Utils.persistResource(target, buildConfig2, name + "-build-config.yaml");
+            Utils.persistResource(getBuildDirectory(target), buildConfig2, name + "-build-config.yaml");
+            properties.setProperty("runtime", buildConfigName);
         } else {
             BuildConfig buildConfig2 = builder.
                     withNewMetadata().withLabels(createCommonLabels(config)).withName(name + "-build").endMetadata().withNewSpec().
@@ -874,7 +912,7 @@ public class OpenShiftSupport {
                     withDockerfilePath("./Dockerfile").
                     endDockerStrategy().endStrategy().endSpec().build();
             osClient.buildConfigs().resource(buildConfig2).createOr(NonDeletingOperation::update);
-            Utils.persistResource(target, buildConfig2, name + "-build-config.yaml");
+            Utils.persistResource(getBuildDirectory(target), buildConfig2, name + "-build-config.yaml");
 
             Build build = osClient.buildConfigs().withName(name + "-build").instantiateBinary().fromFile(file2.toFile());
             CountDownLatch latch = new CountDownLatch(1);

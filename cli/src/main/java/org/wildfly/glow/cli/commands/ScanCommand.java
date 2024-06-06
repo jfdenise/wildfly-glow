@@ -304,6 +304,7 @@ public class ScanCommand extends AbstractCommand {
                 throw new Exception("Can only set a docker image name when provisioning a docker image. Remove the " + Constants.DOCKER_IMAGE_NAME_OPTION + " option");
             }
         }
+        Utils.addDisableDeployersFromConfig(configMap, disableDeployers);
         builder.setIsCli(true);
         MavenRepoManager directMavenResolver = MavenResolver.newMavenResolver();
         ScanResults scanResults = GlowSession.scan(repoManager == null ? directMavenResolver : repoManager, builder.build(), GlowMessageWriter.DEFAULT);

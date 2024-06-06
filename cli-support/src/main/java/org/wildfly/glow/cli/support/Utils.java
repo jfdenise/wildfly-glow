@@ -126,4 +126,13 @@ public class Utils {
             }
         }
     }
+    public static void addDisableDeployersFromConfig(Map<String, String> config, Set<String> addOns) throws Exception {
+        String val = config.get("disable-deployers");
+        if(val != null) {
+            String[] addOnsArray = val.split(",");
+            for(String addOn : addOnsArray) {
+                addOns.add(addOn.trim());
+            }
+        }
+    }
 }

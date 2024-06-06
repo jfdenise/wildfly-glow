@@ -38,6 +38,7 @@ import java.util.Set;
 import org.wildfly.glow.Env;
 import org.wildfly.glow.GlowMessageWriter;
 import org.wildfly.glow.deployment.openshift.api.Deployer;
+import org.wildfly.glow.deployment.openshift.api.OpenShiftSupport;
 import org.wildfly.glow.deployment.openshift.api.Utils;
 
 /**
@@ -123,7 +124,7 @@ public class AMQDeployer implements Deployer {
         if (!dryRun) {
             osClient.resources(Deployment.class).resource(deployment).createOr(NonDeletingOperation::update);
         }
-        Utils.persistResource(target, deployment, REMOTE_BROKER_NAME + "-deployment.yaml");
+        Utils.persistResource(OpenShiftSupport.getDeployersDirectory(target), deployment, REMOTE_BROKER_NAME + "-deployment.yaml");
         IntOrString v = new IntOrString();
         v.setValue(61616);
         Service service = new ServiceBuilder().withNewMetadata().withName(REMOTE_BROKER_NAME).endMetadata().
@@ -133,7 +134,7 @@ public class AMQDeployer implements Deployer {
         if (!dryRun) {
             osClient.services().resource(service).createOr(NonDeletingOperation::update);
         }
-        Utils.persistResource(target, service, REMOTE_BROKER_NAME + "-service.yaml");
+        Utils.persistResource(OpenShiftSupport.getDeployersDirectory(target), service, REMOTE_BROKER_NAME + "-service.yaml");
         writer.info("AMQ Messaging Broker has been deployed");
         return REMOTE_BROKER_APP_MAP;
     }
