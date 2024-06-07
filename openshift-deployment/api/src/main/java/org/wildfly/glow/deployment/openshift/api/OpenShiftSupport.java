@@ -249,7 +249,8 @@ public class OpenShiftSupport {
         }
         Container container = new Container();
         container.setName(name);
-        container.setImage(name + ":latest");
+        String dockerImage = System.getProperty("org.wildfly.glow.openshift.deployment.docker.image", "");
+        container.setImage(dockerImage.isEmpty() ? name + ":latest" : dockerImage);
         container.setPorts(ports);
         container.setEnv(vars);
         container.setImagePullPolicy("IfNotPresent");
@@ -290,7 +291,7 @@ public class OpenShiftSupport {
         }
         if (ha) {
             StatefulSet deployment = new StatefulSetBuilder().withNewMetadata().withLabels(labels).withName(name).endMetadata().
-                    withNewSpec().withReplicas(ha ? 2 : 1).
+                    withNewSpec().withReplicas(2).
                     withNewSelector().withMatchLabels(matchLabels).endSelector().
                     withNewTemplate().withNewMetadata().withLabels(labels).endMetadata().withNewSpec().
                     withContainers(container).withRestartPolicy("Always").
@@ -304,7 +305,7 @@ public class OpenShiftSupport {
             }
         } else {
             Deployment deployment = new DeploymentBuilder().withNewMetadata().withLabels(labels).withName(name).endMetadata().
-                    withNewSpec().withReplicas(ha ? 2 : 1).
+                    withNewSpec().withReplicas(1).
                     withNewSelector().withMatchLabels(matchLabels).endSelector().
                     withNewTemplate().withNewMetadata().withLabels(labels).endMetadata().withNewSpec().
                     withContainers(container).withRestartPolicy("Always").
