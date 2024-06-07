@@ -153,7 +153,7 @@ public class ScanCommand extends AbstractCommand {
     @CommandLine.Option(names = {Constants.CHANNELS_OPTION_SHORT, Constants.CHANNELS_OPTION}, paramLabel = Constants.CHANNELS_OPTION_LABEL)
     Optional<Path> channelsFile;
 
-    @CommandLine.Option(names = {Constants.CLI_CONFIG_FILE_OPTION_SHORT, Constants.CLI_CONFIG_FILE_OPTION}, paramLabel = Constants.CLI_CONFIG_FILE_OPTION_LABEL)
+    @CommandLine.Option(names = {Constants.CONFIG_FILE_OPTION}, paramLabel = Constants.CONFIG_FILE_OPTION_LABEL)
     Optional<Path> configFile;
 
     @Override
@@ -188,6 +188,11 @@ public class ScanCommand extends AbstractCommand {
                 throw new Exception(Constants.SERVER_VERSION_OPTION + "can't be set when " + Constants.CHANNELS_OPTION + " is set.");
             }
             builder.setVersion(wildflyServerVersion.get());
+        } else {
+            String vers = Utils.getServerVersionFromConfig(configMap);
+            if (vers != null) {
+                builder.setVersion(vers);
+            }
         }
         Map<String, String> extraEnv = new HashMap<>();
         Map<String, String> buildExtraEnv = new HashMap<>();

@@ -126,6 +126,9 @@ public class Utils {
             }
         }
     }
+    public static String getServerVersionFromConfig(Map<String, String> config) throws Exception {
+        return config.get("server-version");
+    }
     public static void addDisableDeployersFromConfig(Map<String, String> config, Set<String> addOns) throws Exception {
         String val = config.get("disable-deployers");
         if(val != null) {
