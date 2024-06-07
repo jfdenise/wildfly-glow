@@ -662,37 +662,81 @@ public class OpenShiftSupport {
             Map<String, String> serverImageBuildLabels) throws Exception {
         GalleonBuilder provider = new GalleonBuilder();
         Path dir = target.resolve("tmp").resolve("tmpHome");
-        Files.createDirectory(dir);
-        StringBuilder fps = new StringBuilder();
         Map<String, String> labels = new HashMap<>();
-        try (Provisioning p = provider.newProvisioningBuilder(provisioning).setInstallationHome(dir).build()) {
-            GalleonProvisioningConfig config = provider.newProvisioningBuilder(provisioning).setInstallationHome(dir).build().loadProvisioningConfig(provisioning);
-            GalleonConfigurationWithLayers cl = config.getDefinedConfig(new ConfigId("standalone", "standalone.xml"));
-            for (String s : cl.getIncludedLayers()) {
-                labels.put(truncateValue(osConfig.getLabelRadical() + ".layer." + s), "");
-            }
-            for (String s : cl.getExcludedLayers()) {
-                labels.put(truncateValue(osConfig.getLabelRadical() + ".excluded.layer." + s), "");
-            }
-            for (GalleonFeaturePackConfig gfpc : config.getFeaturePackDeps()) {
-                if (fps.length() != 0) {
-                    fps.append("_");
+        try {
+            Files.createDirectories(dir);
+            StringBuilder fps = new StringBuilder();
+            try (Provisioning p = provider.newProvisioningBuilder(provisioning).setInstallationHome(dir).build()) {
+                GalleonProvisioningConfig config = provider.newProvisioningBuilder(provisioning).setInstallationHome(dir).build().loadProvisioningConfig(provisioning);
+                GalleonConfigurationWithLayers cl = config.getDefinedConfig(new ConfigId("standalone", "standalone.xml"));
+                for (String s : cl.getIncludedLayers()) {
+                    labels.put(truncateValue(osConfig.getLabelRadical() + ".layer." + s), "");
                 }
-                String producerName = gfpc.getLocation().getProducerName();
-                producerName = producerName.replaceAll("::zip", "");
-                int i = producerName.indexOf(":");
-                if (i > 0) {
-                    producerName = producerName.substring(i + 1);
+                for (String s : cl.getExcludedLayers()) {
+                    labels.put(truncateValue(osConfig.getLabelRadical() + ".excluded.layer." + s), "");
                 }
-                producerName = producerName.replaceAll(":", "-");
-                labels.put(truncateValue(osConfig.getLabelRadical() + producerName), gfpc.getLocation().getBuild());
+                for (GalleonFeaturePackConfig gfpc : config.getFeaturePackDeps()) {
+                    if (fps.length() != 0) {
+                        fps.append("_");
+                    }
+                    String producerName = gfpc.getLocation().getProducerName();
+                    producerName = producerName.replaceAll("::zip", "");
+                    int i = producerName.indexOf(":");
+                    if (i > 0) {
+                        producerName = producerName.substring(i + 1);
+                    }
+                    producerName = producerName.replaceAll(":", "-");
+                    labels.put(truncateValue(osConfig.getLabelRadical() + "." + producerName), gfpc.getLocation().getBuild());
+                }
             }
-        }
 
-        for (Entry<String, String> entry : serverImageBuildLabels.entrySet()) {
-            labels.put(truncateValue(entry.getKey()), truncateValue(entry.getValue()));
+            for (Entry<String, String> entry : serverImageBuildLabels.entrySet()) {
+                labels.put(truncateValue(entry.getKey()), truncateValue(entry.getValue()));
+            }
+        } finally {
+            IoUtils.recursiveDelete(dir);
         }
-        labels.putAll(createCommonLabels(osConfig));
+        return labels;
+    }
+
+    private static Map<String, String> createDockerImageLabels(Path target, Path provisioning, OpenShiftConfiguration osConfig,
+            Map<String, String> serverImageBuildLabels) throws Exception {
+        GalleonBuilder provider = new GalleonBuilder();
+        Path dir = target.resolve("tmp").resolve("tmpHome");
+        Map<String, String> labels = new HashMap<>();
+        try {
+            Files.createDirectories(dir);
+            StringBuilder fps = new StringBuilder();
+            try (Provisioning p = provider.newProvisioningBuilder(provisioning).setInstallationHome(dir).build()) {
+                GalleonProvisioningConfig config = provider.newProvisioningBuilder(provisioning).setInstallationHome(dir).build().loadProvisioningConfig(provisioning);
+                GalleonConfigurationWithLayers cl = config.getDefinedConfig(new ConfigId("standalone", "standalone.xml"));
+                for (String s : cl.getIncludedLayers()) {
+                    String current = labels.get(osConfig.getLabelRadical() + ".layers");
+                    labels.put(osConfig.getLabelRadical() + ".layers", (current == null ? "" : current + ",") +s);
+                }
+                for (String s : cl.getExcludedLayers()) {
+                    String current = labels.get(osConfig.getLabelRadical() + ".excluded-layers");
+                    labels.put(osConfig.getLabelRadical() + ".excluded-layers", (current == null ? "" : current+",") + s);
+                }
+                for (GalleonFeaturePackConfig gfpc : config.getFeaturePackDeps()) {
+                    String producerName = gfpc.getLocation().getProducerName();
+                    producerName = producerName.replaceAll("::zip", "");
+                    int i = producerName.indexOf(":");
+                    if (i > 0) {
+                        producerName = producerName.substring(i + 1);
+                    }
+                    producerName = producerName.replaceAll(":", "_");
+                    String version = gfpc.getLocation().getBuild();
+                    if (version != null) {
+                        producerName += "_" + version;
+                    }
+                    String current = labels.get(osConfig.getLabelRadical() + ".feature-packs");
+                    labels.put(osConfig.getLabelRadical() + ".feature-packs",  (current == null ? "" : current+",") + producerName);
+                }
+            }
+        } finally {
+            IoUtils.recursiveDelete(dir);
+        }
         return labels;
     }
 
@@ -778,8 +822,19 @@ public class OpenShiftSupport {
             OpenShiftConfiguration config,
             Map<String, String> serverImageBuildLabels, String appName, Properties properties) throws Exception {
         String serverImageName = appName + "-build-artifacts";
-
-        ImageStream stream = new ImageStreamBuilder().withNewMetadata().withLabels(createCommonLabels(config)).withName(serverImageName).
+        Path provisioning = target.resolve("galleon").resolve("provisioning.xml");
+        Map<String, String> labels = createDockerImageLabels(target, provisioning, config, serverImageBuildLabels);
+        // Store labels
+        Path labelsFile = getBuildDirectory(target).resolve("labels.properties");
+        Properties props = new Properties();
+        for(Entry<String, String> entry : labels.entrySet()) {
+            props.setProperty(entry.getKey(), entry.getValue());
+        }
+        try(FileOutputStream out = new FileOutputStream(labelsFile.toFile())) {
+            props.store(out, "server image labels based on provisioning content");
+        }
+        labels.putAll(createCommonLabels(config));
+        ImageStream stream = new ImageStreamBuilder().withNewMetadata().withLabels(labels).withName(serverImageName).
                 endMetadata().withNewSpec().withLookupPolicy(new ImageLookupPolicy(Boolean.TRUE)).endSpec().build();
         Utils.persistResource(getBuildDirectory(target), stream, serverImageName + "-image-stream.yaml");
         BuildConfigBuilder builder = new BuildConfigBuilder();
