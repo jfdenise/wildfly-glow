@@ -24,9 +24,13 @@ import java.util.Set;
 import org.jboss.galleon.api.config.GalleonProvisioningConfig;
 import org.jboss.galleon.universe.FeaturePackLocation;
 import org.wildfly.glow.AddOn;
+import org.wildfly.glow.Arguments;
+import org.wildfly.glow.ArtifactResolution;
+import org.wildfly.glow.GlowSession;
 import org.wildfly.glow.Layer;
 import org.wildfly.glow.LayerMapping;
 import org.wildfly.glow.ProvisioningUtils;
+import org.wildfly.glow.ScanArguments;
 import org.wildfly.glow.maven.MavenResolver;
 
 /**
@@ -58,8 +62,13 @@ public class Utils {
             }
 
         };
+        ScanArguments.Builder builder = Arguments.scanBuilder();
+        if (channelsFile != null) {
+            builder.setChannels(channelsFile);
+        }
+        ArtifactResolution resolution = GlowSession.buildArtifactResolution(MavenResolver.newArtifactResolution(), builder.build());
         ProvisioningUtils.traverseProvisioning(consumer, context, provisioningXml, isLatest, serverVersion,
-                isPreview, MavenResolver.buildMavenResolver(channelsFile));
+                isPreview, resolution.getRepoManager());
     }
 
     public static void setSystemProperties(Set<String> systemProperties) throws Exception {

@@ -35,12 +35,20 @@ import org.jboss.galleon.universe.maven.repo.MavenRepoManager;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.repository.RepositoryPolicy;
 import org.wildfly.channel.Channel;
+import org.wildfly.channel.ChannelManifestCoordinate;
 import org.wildfly.channel.ChannelMapper;
 import org.wildfly.channel.ChannelSession;
+import org.wildfly.channel.Repository;
 import org.wildfly.channel.maven.VersionResolverFactory;
+import static org.wildfly.channel.maven.VersionResolverFactory.DEFAULT_REPOSITORY_MAPPER;
+import org.wildfly.glow.ArtifactResolutionBuilder;
 
 /**
  *
@@ -53,13 +61,29 @@ public final class MavenResolver {
     public static final String GA_REPO_URL = "https://maven.repository.redhat.com/ga/";
     public static final String SPRING_REPO_URL = "https://repo.spring.io/milestone";
 
-    public static MavenRepoManager newMavenResolver() {
-        RepositorySystem repoSystem = MavenResolver.newRepositorySystem();
-        DefaultRepositorySystemSession session = MavenRepositorySystemUtils.newSession();
-        String localPath = System.getProperty("maven.repo.local");
-        Path localCache = localPath == null ? Paths.get(System.getProperty("user.home"), ".m2", "repository") : Paths.get(localPath);
-        LocalRepository localRepo = new LocalRepository(localCache.toFile());
-        session.setLocalRepositoryManager(repoSystem.newLocalRepositoryManager(session, localRepo));
+    static MavenRepoManager newMavenResolver() {
+        RepositorySystem repoSystem = newRepositorySystem();
+        MavenArtifactRepositoryManager resolver
+                = new MavenArtifactRepositoryManager(repoSystem, newMavenSession(repoSystem), getRemoteRepositories());
+        return resolver;
+    }
+
+    static MavenRepoManager newRHMavenResolver() {
+        RepositorySystem repoSystem = newRepositorySystem();
+        MavenArtifactRepositoryManager resolver
+                = new MavenArtifactRepositoryManager(repoSystem, newMavenSession(repoSystem), getRHRemoteRepositories());
+        return resolver;
+    }
+
+    public static ArtifactResolutionBuilder newArtifactResolution() throws Exception {
+        return new ArtifactResolutionImpl();
+    }
+
+    public static ArtifactResolutionBuilder newRHArtifactResolution() throws Exception {
+        return new RHArtifactResolutionImpl();
+    }
+
+    public static List<RemoteRepository> getRemoteRepositories() {
         List<RemoteRepository> repos = new ArrayList<>();
         RemoteRepository.Builder central = new RemoteRepository.Builder("central", "default", CENTRAL_REPO_URL);
         central.setSnapshotPolicy(new RepositoryPolicy(false, RepositoryPolicy.UPDATE_POLICY_NEVER,
@@ -77,26 +101,10 @@ public final class MavenResolver {
         spring.setSnapshotPolicy(new RepositoryPolicy(false, RepositoryPolicy.UPDATE_POLICY_NEVER,
                 RepositoryPolicy.CHECKSUM_POLICY_IGNORE));
         repos.add(spring.build());
-        MavenArtifactRepositoryManager resolver
-                = new MavenArtifactRepositoryManager(repoSystem, session, repos);
-        return resolver;
+        return repos;
     }
 
-    static RepositorySystem newRepositorySystem() {
-        DefaultServiceLocator locator = MavenRepositorySystemUtils.newServiceLocator();
-        locator.addService(RepositoryConnectorFactory.class, BasicRepositoryConnectorFactory.class);
-        locator.addService(TransporterFactory.class, FileTransporterFactory.class);
-        locator.addService(TransporterFactory.class, HttpTransporterFactory.class);
-        return locator.getService(RepositorySystem.class);
-    }
-
-    public static MavenRepoManager newRHMavenResolver() {
-        RepositorySystem repoSystem = newRepositorySystem();
-        DefaultRepositorySystemSession session = MavenRepositorySystemUtils.newSession();
-        String localPath = System.getProperty("maven.repo.local");
-        Path localCache = localPath == null ? Paths.get(System.getProperty("user.home"), ".m2", "repository") : Paths.get(localPath);
-        LocalRepository localRepo = new LocalRepository(localCache.toFile());
-        session.setLocalRepositoryManager(repoSystem.newLocalRepositoryManager(session, localRepo));
+    public static List<RemoteRepository> getRHRemoteRepositories() {
         List<RemoteRepository> repos = new ArrayList<>();
         RemoteRepository.Builder ga = new RemoteRepository.Builder("redhat-ga", "default", GA_REPO_URL);
         ga.setSnapshotPolicy(new RepositoryPolicy(false, RepositoryPolicy.UPDATE_POLICY_NEVER,
@@ -104,34 +112,56 @@ public final class MavenResolver {
         ga.setReleasePolicy(new RepositoryPolicy(true, RepositoryPolicy.UPDATE_POLICY_NEVER,
                 RepositoryPolicy.CHECKSUM_POLICY_IGNORE));
         repos.add(ga.build());
-        MavenArtifactRepositoryManager resolver
-                = new MavenArtifactRepositoryManager(repoSystem, session, repos);
-        return resolver;
+        return repos;
     }
 
-    public static MavenRepoManager buildMavenResolver(Path channelsFile) throws Exception {
-        MavenRepoManager resolver = null;
-        if (channelsFile != null) {
-            if (!Files.exists(channelsFile)) {
-                throw new Exception(channelsFile + " file doesn't exist");
-            }
-            ChannelSession session = buildChannelSession(channelsFile);
-            resolver = new ChannelMavenArtifactRepositoryManager(session);
-        } else {
-            resolver = MavenResolver.newMavenResolver();
-        }
-        return resolver;
-    }
-
-    public static ChannelSession buildChannelSession(Path path) throws Exception {
-        String content = Files.readString(path);
-        List<Channel> channels = ChannelMapper.fromString(content);
-        Path localCache = Paths.get(System.getProperty("user.home"), ".m2", "repository");
-        LocalRepository localRepo = new LocalRepository(localCache.toFile());
-        RepositorySystem repoSystem = MavenResolver.newRepositorySystem();
+    public static RepositorySystemSession newMavenSession(RepositorySystem repoSystem) {
         DefaultRepositorySystemSession session = MavenRepositorySystemUtils.newSession();
+        String localPath = System.getProperty("maven.repo.local");
+        Path localCache = localPath == null ? Paths.get(System.getProperty("user.home"), ".m2", "repository") : Paths.get(localPath);
+        LocalRepository localRepo = new LocalRepository(localCache.toFile());
         session.setLocalRepositoryManager(repoSystem.newLocalRepositoryManager(session, localRepo));
-        VersionResolverFactory factory = new VersionResolverFactory(repoSystem, session);
-        return new ChannelSession(channels, factory);
+        return session;
+    }
+
+    public static RepositorySystem newRepositorySystem() {
+        DefaultServiceLocator locator = MavenRepositorySystemUtils.newServiceLocator();
+        locator.addService(RepositoryConnectorFactory.class, BasicRepositoryConnectorFactory.class);
+        locator.addService(TransporterFactory.class, FileTransporterFactory.class);
+        locator.addService(TransporterFactory.class, HttpTransporterFactory.class);
+        return locator.getService(RepositorySystem.class);
+    }
+
+    public static ChannelSession buildChannelSession(List<Channel> channels, List<RemoteRepository> remoteRepos) throws Exception {
+        return new ChannelSession(channels, buildVersionResolverFactory(remoteRepos));
+    }
+
+    public static List<Channel> buildChannels(Path path) throws Exception {
+        String content = Files.readString(path);
+        return ChannelMapper.fromString(content);
+    }
+
+    public static Channel buildChannel(ChannelManifestCoordinate manifest, List<RemoteRepository> remoteRepos) throws Exception {
+        List<Repository> repos = new ArrayList<>();
+        for (RemoteRepository r : remoteRepos) {
+            repos.add(new Repository(r.getId(), r.getUrl()));
+        }
+        return new Channel(null, null, null, repos, manifest, null, null);
+    }
+
+    public static VersionResolverFactory buildVersionResolverFactory(List<RemoteRepository> remoteRepos) {
+        RepositorySystem repoSystem = MavenResolver.newRepositorySystem();
+        Map<String, RemoteRepository> mapping = new HashMap<>();
+        for (RemoteRepository r : remoteRepos) {
+            mapping.put(r.getId(), r);
+        }
+        Function<Repository, RemoteRepository> mapper = r -> {
+            RemoteRepository rep = mapping.get(r.getId());
+            if (rep == null) {
+                rep = DEFAULT_REPOSITORY_MAPPER.apply(r);
+            }
+            return rep;
+        };
+        return new VersionResolverFactory(repoSystem, newMavenSession(repoSystem), mapper);
     }
 }

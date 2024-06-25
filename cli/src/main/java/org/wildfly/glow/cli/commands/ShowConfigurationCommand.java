@@ -34,9 +34,12 @@ import org.jboss.galleon.universe.FeaturePackLocation.FPID;
 import org.jboss.galleon.universe.FeaturePackLocation.ProducerSpec;
 import org.wildfly.glow.maven.MavenResolver;
 import org.wildfly.glow.Arguments;
+import org.wildfly.glow.ArtifactResolution;
 import org.wildfly.glow.FeaturePacks;
+import org.wildfly.glow.GlowSession;
 import org.wildfly.glow.Layer;
 import org.wildfly.glow.LayerMapping;
+import org.wildfly.glow.ScanArguments;
 import org.wildfly.glow.deployment.openshift.api.Deployer;
 
 import picocli.CommandLine;
@@ -98,7 +101,12 @@ public class ShowConfigurationCommand extends AbstractCommand {
                 print(configStr);
             }
         };
-        ProvisioningUtils.traverseProvisioning(consumer, context, provisioningXml.orElse(null), wildflyServerVersion.isEmpty(), vers, wildflyPreview.orElse(false), MavenResolver.buildMavenResolver(channelsFile.orElse(null)));
+        ScanArguments.Builder builder = Arguments.scanBuilder();
+        if (channelsFile.isPresent()) {
+            builder.setChannels(channelsFile.get());
+        }
+        ArtifactResolution resolution = GlowSession.buildArtifactResolution(MavenResolver.newArtifactResolution(), builder.build());
+        ProvisioningUtils.traverseProvisioning(consumer, context, provisioningXml.orElse(null), wildflyServerVersion.isEmpty(), vers, wildflyPreview.orElse(false), resolution.getRepoManager());
 
         return 0;
     }

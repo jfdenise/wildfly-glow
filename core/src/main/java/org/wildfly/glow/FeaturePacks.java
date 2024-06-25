@@ -17,9 +17,11 @@
  */
 package org.wildfly.glow;
 
+import java.io.File;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
@@ -38,6 +40,7 @@ public class FeaturePacks {
 
     private static final String VERSIONS = "versions.yaml";
     private static final String PROVISIONING_FILE_RADICAL = "/provisioning-";
+    private static final String MANIFEST_FILE_RADICAL = "/manifest-";
     private static final String TECH_PREVIEW = "/tech-preview/";
 
     public static final String URL_PROPERTY = "wildfly-glow-galleon-feature-packs-url";
@@ -87,5 +90,29 @@ public class FeaturePacks {
         Yaml yaml = new Yaml();
         Map<String, String> map = yaml.load(new URI(rootURL + VERSIONS).toURL().openStream());
         return map.get("latest");
+    }
+
+    public static URL getManifest(String version, String context, boolean techPreview) throws Exception {
+        String rootURL = getFeaturePacksURL();
+        Yaml yaml = new Yaml();
+        if (version == null) {
+            Map<String, String> map = yaml.load(new URI(rootURL + VERSIONS).toURL().openStream());
+            version = map.get("latest");
+        }
+        URL url = new URL(rootURL + version + (techPreview ? TECH_PREVIEW : "") + MANIFEST_FILE_RADICAL + context + ".yaml");
+        boolean exists = false;
+        if ("file".equals(url.getProtocol())) {
+            File f = new File(url.toURI());
+            exists = Files.exists(f.toPath());
+        } else {
+            HttpURLConnection huc = (HttpURLConnection) url.openConnection();
+            int responseCode = huc.getResponseCode();
+            exists = HttpURLConnection.HTTP_OK == responseCode;
+        }
+        if (exists) {
+            return url;
+        } else {
+            return null;
+        }
     }
 }

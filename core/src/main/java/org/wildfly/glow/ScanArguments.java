@@ -23,7 +23,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
-import org.wildfly.channel.ChannelSession;
 
 public interface ScanArguments {
 
@@ -77,7 +76,7 @@ public interface ScanArguments {
     String getConfigStability();
     String getPackageStability();
     boolean isCli();
-    ChannelSession getChannelSession();
+    Path getChannels();
 
     default Builder createScanArgumentsBuilder() {
         return new Builder();
@@ -169,8 +168,8 @@ public interface ScanArguments {
             this.isCli = isCli;
             return this;
         }
-        public Builder setChannelSession(ChannelSession channelSession) {
-            this.channelSession = channelSession;
+        public Builder setChannels(Path channels) {
+            this.channels = channels;
             return this;
         }
     }

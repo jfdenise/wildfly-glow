@@ -74,6 +74,11 @@ import org.jboss.galleon.universe.Channel;
 import org.jboss.galleon.universe.FeaturePackLocation;
 import org.jboss.galleon.universe.UniverseResolver;
 import org.jboss.galleon.universe.maven.MavenChannel;
+import org.jboss.galleon.universe.maven.repo.MavenRepoManager;
+import org.wildfly.channel.ChannelManifestCoordinate;
+import org.wildfly.channel.ChannelSession;
+import org.wildfly.glow.ArtifactResolutionBuilder;
+import org.wildfly.glow.ChannelMavenArtifactRepositoryManager;
 import org.wildfly.glow.ScanArguments;
 import org.wildfly.glow.error.IdentifiedError;
 import static org.wildfly.glow.plugin.arquillian.GlowArquillianDeploymentExporter.TEST_CLASSPATH;
@@ -323,10 +328,11 @@ public class ScanMojo extends AbstractMojo {
                 paths.add(new File(s).getAbsolutePath());
             }
             MavenArtifactRepositoryManager artifactResolver = new MavenArtifactRepositoryManager(repoSystem, repoSession, repositories);
+             ConfiguredChannels cr = null;
             if (channels != null && !channels.isEmpty()) {
                 getLog().debug("WildFly channel enabled, feature-pack versions are retrieved from channels (if stream known).");
                 try {
-                    ConfiguredChannels cr = new ConfiguredChannels(channels,
+                    cr = new ConfiguredChannels(channels,
                             repoSystem, repoSession, repositories,
                             getLog(), true);
                     UniverseResolver universeResolver = UniverseResolver.builder().addArtifactResolver(artifactResolver).build();
@@ -404,8 +410,28 @@ public class ScanMojo extends AbstractMojo {
             }
 
             Arguments arguments = argumentsBuilder.build();
+            ArtifactResolutionBuilder resolutionBuilder = new ArtifactResolutionBuilder() {
+                @Override
+                public org.wildfly.channel.Channel buildChannel(ChannelManifestCoordinate coordinates) throws Exception {
+                    return ChannelConfiguration.toChannel(repositories, coordinates);
+                }
 
-            try (ScanResults results = GlowSession.scan(artifactResolver,
+                @Override
+                public ChannelSession buildChannelSession(List<org.wildfly.channel.Channel> channels) throws Exception {
+                    return ConfiguredChannels.buildChannelSession(repoSystem, repoSession, repositories, channels);
+                }
+
+                @Override
+                public MavenRepoManager getMavenRepoManager() throws Exception {
+                    return artifactResolver;
+                }
+
+                @Override
+                public MavenRepoManager getChannelRepoManager(ChannelSession session) throws Exception {
+                    return new ChannelMavenArtifactRepositoryManager(session, artifactResolver);
+                }
+            };
+            try (ScanResults results = GlowSession.scan(resolutionBuilder,
                     arguments, writer)) {
                 boolean skipTests = Boolean.getBoolean("maven.test.skip") || Boolean.getBoolean("skipTests");
                 if (skipTests) {

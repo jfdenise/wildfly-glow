@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.wildfly.glow.maven;
+package org.wildfly.glow;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -35,9 +35,11 @@ public class ChannelMavenArtifactRepositoryManager implements MavenRepoManager, 
     private static final String REQUIRE_CHANNEL_FOR_ALL_ARTIFACT = "org.wildfly.plugins.galleon.all.artifact.requires.channel.resolution";
 
     private final ChannelSession channelSession;
+    private final MavenRepoManager fallback;
 
-    public ChannelMavenArtifactRepositoryManager(ChannelSession channelSession) {
+    public ChannelMavenArtifactRepositoryManager(ChannelSession channelSession, MavenRepoManager fallback) {
         this.channelSession = channelSession;
+        this.fallback = fallback;
     }
 
     @Override
@@ -77,8 +79,7 @@ public class ChannelMavenArtifactRepositoryManager implements MavenRepoManager, 
     @Override
     public void resolveLatestVersion(MavenArtifact artifact) throws MavenUniverseException {
         // To resolve community universe
-        MavenRepoManager resolver = MavenResolver.newMavenResolver();
-        resolver.resolveLatestVersion(artifact);
+        fallback.resolveLatestVersion(artifact);
     }
 
     @Override
@@ -95,16 +96,14 @@ public class ChannelMavenArtifactRepositoryManager implements MavenRepoManager, 
     public void resolveLatestVersion(MavenArtifact artifact, String lowestQualifier, Pattern includeVersion,
             Pattern excludeVersion) throws MavenUniverseException {
          // To resolve community universe
-        MavenRepoManager resolver = MavenResolver.newMavenResolver();
-        resolver.resolveLatestVersion(artifact, lowestQualifier, includeVersion, excludeVersion);
+        fallback.resolveLatestVersion(artifact, lowestQualifier, includeVersion, excludeVersion);
     }
 
     @Override
     public void resolveLatestVersion(MavenArtifact artifact, String lowestQualifier, boolean locallyAvailable)
             throws MavenUniverseException {
         // To resolve community universe
-        MavenRepoManager resolver = MavenResolver.newMavenResolver();
-        resolver.resolveLatestVersion(artifact, lowestQualifier, locallyAvailable);
+        fallback.resolveLatestVersion(artifact, lowestQualifier, locallyAvailable);
     }
 
     @Override

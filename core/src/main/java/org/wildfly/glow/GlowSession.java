@@ -31,6 +31,7 @@ import org.wildfly.glow.windup.WindupSupport;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -61,6 +62,9 @@ import org.jboss.galleon.api.config.GalleonConfigurationWithLayersBuilder;
 import org.jboss.galleon.api.config.GalleonFeaturePackConfig;
 import org.jboss.galleon.api.config.GalleonProvisioningConfig;
 import org.jboss.galleon.universe.UniverseResolver;
+import org.wildfly.channel.Channel;
+import org.wildfly.channel.ChannelManifestCoordinate;
+import org.wildfly.channel.ChannelMapper;
 import org.wildfly.channel.ChannelSession;
 import org.wildfly.channel.NoStreamFoundException;
 import org.wildfly.channel.VersionResult;
@@ -82,14 +86,16 @@ public class GlowSession {
     private final MavenRepoManager resolver;
     private final Arguments arguments;
     private final GlowMessageWriter writer;
+    private final ArtifactResolution artifactResolution;
 
-    private GlowSession(MavenRepoManager resolver, Arguments arguments, GlowMessageWriter writer) {
-        this.resolver = resolver;
+    private GlowSession(ArtifactResolutionBuilder maven, Arguments arguments, GlowMessageWriter writer) throws Exception {
         this.arguments = arguments;
         this.writer = writer;
+        this.artifactResolution = buildArtifactResolution(maven, arguments);
+        this.resolver = artifactResolution.getRepoManager();
     }
 
-    public static void goOffline(MavenRepoManager resolver, GoOfflineArguments arguments, GlowMessageWriter writer) throws Exception {
+    public static void goOffline(ArtifactResolutionBuilder resolver, GoOfflineArguments arguments, GlowMessageWriter writer) throws Exception {
         if (!(arguments instanceof Arguments)) {
             throw new IllegalArgumentException("Please use the API to create the GoOfflineArguments instance");
         }
@@ -128,7 +134,7 @@ public class GlowSession {
         IoUtils.recursiveDelete(OFFLINE_CONTENT);
     }
 
-    public static ScanResults scan(MavenRepoManager resolver, ScanArguments arguments, GlowMessageWriter writer) throws Exception {
+    public static ScanResults scan(ArtifactResolutionBuilder resolver, ScanArguments arguments, GlowMessageWriter writer) throws Exception {
         if (!(arguments instanceof Arguments)) {
             throw new IllegalArgumentException("Please use the API to create the ScanArguments instance");
         }
@@ -136,8 +142,44 @@ public class GlowSession {
         return session.scan();
     }
 
-    public ScanResults scan() throws Exception {
+    public static ArtifactResolution buildArtifactResolution(ArtifactResolutionBuilder resolution, Arguments arguments) throws Exception {
+        MavenRepoManager repoManager;
+        MavenRepoManager defaultRepoManager;
+        List<Channel> channels = null;
+        ChannelSession channelSession = null;
+        if (Files.exists(OFFLINE_ZIP)) {
+            repoManager = resolution.getMavenRepoManager();
+        } else {
+            if (arguments.getChannels() == null) {
+                if (arguments.getProvisioningXML() == null) {
+                    URL manifestURL = FeaturePacks.getManifest(arguments.getVersion(),
+                            arguments.isCloud() ? Arguments.CLOUD_EXECUTION_CONTEXT : Arguments.BARE_METAL_EXECUTION_CONTEXT, arguments.isTechPreview());
+                    // Newer release of WildFly relies on channel
+                    if (manifestURL == null) {
+                        repoManager = resolution.getMavenRepoManager();
+                    } else {
+                        ChannelManifestCoordinate manifest = new ChannelManifestCoordinate(manifestURL);
+                        Channel channel = resolution.buildChannel(manifest);
+                        channels = new ArrayList<>();
+                        channels.add(channel);
+                        channelSession = resolution.buildChannelSession(channels);
+                        repoManager = resolution.getChannelRepoManager(channelSession);
+                    }
+                } else {
+                    repoManager = resolution.getMavenRepoManager();
+                }
+            } else {
+                String content = Files.readString(arguments.getChannels());
+                channels = ChannelMapper.fromString(content);
+                channelSession = resolution.buildChannelSession(channels);
+                repoManager = resolution.getChannelRepoManager(channelSession);
+            }
+        }
+        defaultRepoManager = resolution.getMavenRepoManager();
+        return new ArtifactResolution(repoManager, channels, channelSession, defaultRepoManager);
+    }
 
+    public ScanResults scan() throws Exception {
         Set<Layer> layers = new LinkedHashSet<>();
         Set<AddOn> possibleAddOns = new TreeSet<>();
         ErrorIdentificationSession errorSession = new ErrorIdentificationSession();
@@ -167,9 +209,8 @@ public class GlowSession {
             }
             // Channel handling
             Map<ProducerSpec, FPID> fpVersions = new HashMap<>();
-            Map<ProducerSpec, FPID> resolvedInChannel = new HashMap<>();
-            if (arguments.getChannelSession() != null) {
-                ChannelSession channelSession = arguments.getChannelSession();
+            Map<ProducerSpec, FPID> originalVersions = new HashMap<>();
+            if (artifactResolution.getChannelSession() != null) {
                 // Compute versions based on channel.
                 GalleonProvisioningConfig.Builder outputConfigBuilder = GalleonProvisioningConfig.builder();
                 for (GalleonFeaturePackConfig dep : config.getFeaturePackDeps()) {
@@ -179,16 +220,16 @@ public class GlowSession {
                     String artifactId = coordinates[1];
                     FeaturePackLocation loc;
                     try {
-                        VersionResult res = channelSession.findLatestMavenArtifactVersion(groupId, artifactId,
-                            "zip", null, null);
+                        VersionResult res = artifactResolution.getChannelSession().findLatestMavenArtifactVersion(groupId, artifactId,
+                                "zip", null, null);
                         loc = dep.getLocation().replaceBuild(res.getVersion());
-                    } catch(NoStreamFoundException ex) {
-                       writer.warn("WARNING: Feature-pack " + dep.getLocation() + " is not present in the configured channel, ignoring it.");
-                       continue;
+                    } catch (NoStreamFoundException ex) {
+                        writer.warn("WARNING: Feature-pack " + dep.getLocation() + " is not present in the configured channel, ignoring it.");
+                        continue;
                     }
                     outputConfigBuilder.addFeaturePackDep(loc);
                     fpVersions.put(fpid.getProducer(), loc.getFPID());
-                    resolvedInChannel.put(fpid.getProducer(), loc.getFPID());
+                    originalVersions.put(fpid.getProducer(), fpid);
                 }
                 config = outputConfigBuilder.build();
             } else {
@@ -536,7 +577,7 @@ public class GlowSession {
             }
             // Identify the active feature-packs.
             GalleonProvisioningConfig activeConfig = buildProvisioningConfig(config,
-                    universeResolver, allBaseLayers, baseLayer, decorators, excludedLayers, fpDependencies, arguments.getConfigName(), arguments.getConfigStability(), arguments.getPackageStability(), resolvedInChannel);
+                    universeResolver, allBaseLayers, baseLayer, decorators, excludedLayers, fpDependencies, arguments.getConfigName(), arguments.getConfigStability(), arguments.getPackageStability(), originalVersions);
 
             // Handle stability
             if (arguments.getConfigStability() != null) {
@@ -674,6 +715,12 @@ public class GlowSession {
             Path prov = target.resolve("provisioning.xml");
             provisioning.storeProvisioningConfig(scanResults.getProvisioningConfig(),prov);
             files.put(OutputContent.OutputFile.PROVISIONING_XML_FILE, prov.toAbsolutePath());
+            if(artifactResolution.getChannels() != null && !artifactResolution.getChannels().isEmpty()) {
+                String channelsContent = ChannelMapper.toYaml(artifactResolution.getChannels());
+                Path channelsFile = target.resolve("channel.yaml");
+                Files.write(channelsFile, channelsContent.getBytes());
+                files.put(OutputContent.OutputFile.CHANNEL_FILE, channelsFile.toAbsolutePath());
+            }
         }
         StringBuilder envFileContent = new StringBuilder();
         if (!scanResults.getSuggestions().getStronglySuggestedConfigurations().isEmpty() ||
@@ -997,7 +1044,7 @@ public class GlowSession {
                 // Reset the version if ruled by channel
                 FPID orig = channelVersions.get(cfg.getLocation().getProducer());
                 if ( orig != null && orig.getLocation().isMavenCoordinates()) {
-                    gav = gav.getLocation().replaceBuild("").getFPID();
+                    gav = gav.getLocation().replaceBuild(orig.getBuild()).getFPID();
                 }
                 activeFeaturePacks.add(gav);
             }
