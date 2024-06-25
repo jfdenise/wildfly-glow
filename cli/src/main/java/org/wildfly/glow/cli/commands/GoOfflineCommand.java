@@ -65,7 +65,7 @@ public class GoOfflineCommand extends AbstractCommand {
         if (provisioningXml.isPresent()) {
             builder.setProvisoningXML(provisioningXml.get());
         }
-        GlowSession.goOffline(MavenResolver.newMavenResolver(), builder.build(), GlowMessageWriter.DEFAULT);
+        GlowSession.goOffline(MavenResolver.newMavenResolver(), builder.build(), GlowMessageWriter.DEFAULT, MavenResolver.newChannelBuilder());
         print("Offline zip file %s generated", OFFLINE_ZIP);
         return 0;
     }

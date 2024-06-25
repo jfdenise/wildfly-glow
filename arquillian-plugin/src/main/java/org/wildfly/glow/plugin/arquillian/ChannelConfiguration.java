@@ -103,10 +103,14 @@ public class ChannelConfiguration {
 
     public Channel toChannel(List<RemoteRepository> repositories) throws MojoExecutionException {
         validate();
+        return toChannel(repositories, getManifest());
+    }
+
+    public static Channel toChannel(List<RemoteRepository> repositories, ChannelManifestCoordinate coordinates) throws MojoExecutionException {
         List<Repository> repos = new ArrayList<>();
         for (RemoteRepository r : repositories) {
             repos.add(new Repository(r.getId(), r.getUrl()));
         }
-        return new Channel(null, null, null, repos, getManifest(), null, null);
+        return new Channel(null, null, null, repos, coordinates, null, null);
     }
 }
