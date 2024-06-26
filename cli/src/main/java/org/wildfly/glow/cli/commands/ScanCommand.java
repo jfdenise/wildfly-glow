@@ -292,9 +292,9 @@ public class ScanCommand extends AbstractCommand {
         }
         builder.setExcludeArchivesFromScan(excludeArchivesFromScan);
 
-        // Enforce community stability level. Doing so, any discovered features at a lower level are advertised
+        // Set a default community stability level. Doing so, any discovered features at a lower level are advertised
         String userSetConfigStability = null;
-        builder.setConfigStability(org.jboss.galleon.Constants.STABILITY_COMMUNITY);
+        builder.setDefaultConfigStability(org.jboss.galleon.Constants.STABILITY_COMMUNITY);
         if (stability.isPresent()) {
             if (configStability.isPresent()) {
                 throw new Exception(Constants.CONFIG_STABILITY_OPTION + " can't be set when " + Constants.STABILITY_OPTION + " is set");
@@ -474,7 +474,8 @@ public class ScanCommand extends AbstractCommand {
                         new OpenShiftConfiguration.Builder().build(),
                         MavenResolver.newMavenResolver(),
                         userSetConfigStability,
-                        Collections.emptyMap(), OutputFormat.OPENSHIFT_RESOURCES.equals(provision.get()));
+                        Collections.emptyMap(), OutputFormat.OPENSHIFT_RESOURCES.equals(provision.get()),
+                        scanResults.getChannels());
                 print("@|bold \nOpenshift build and deploy DONE.|@");
             } else {
                 if (content.getDockerImageName() != null) {

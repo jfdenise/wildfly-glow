@@ -80,6 +80,8 @@ import org.jboss.galleon.config.ConfigId;
 import org.jboss.galleon.universe.maven.repo.MavenRepoManager;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.ZipUtils;
+import org.wildfly.channel.Channel;
+import org.wildfly.channel.ChannelMapper;
 import org.wildfly.glow.ConfigurationResolver;
 import org.wildfly.glow.Env;
 import org.wildfly.glow.GlowMessageWriter;
@@ -469,7 +471,7 @@ public class OpenShiftSupport {
             OpenShiftConfiguration config,
             MavenRepoManager mvnResolver,
             String stability,
-            Map<String, String> serverImageBuildLabels, boolean dryRun) throws Exception {
+            Map<String, String> serverImageBuildLabels, boolean dryRun, List<Channel> channels) throws Exception {
         Set<Layer> layers = scanResults.getDiscoveredLayers();
         Set<Layer> metadataOnlyLayers = scanResults.getMetadataOnlyLayers();
         Map<Layer, Set<Env>> requiredBuildTime = scanResults.getSuggestions().getBuildTimeRequiredConfigurations();
@@ -587,13 +589,13 @@ public class OpenShiftSupport {
         // Can be overriden by user
         actualBuildEnv.putAll(buildExtraEnv);
         Properties properties = new Properties();
-        createBuild(writer, target, osClient, appName, initScript, cliScript, actualBuildEnv, config, serverImageBuildLabels, properties);
+        createBuild(writer, target, osClient, appName, initScript, cliScript, actualBuildEnv, config, serverImageBuildLabels, properties, channels);
         if (!dryRun) {
             writer.info("Deploying application image on OpenShift");
         }
         String clientImageTag = null;
         if( osClient == null) {
-            clientImageTag = generateClientImageHash(deployments, writer, target, buildExtraEnv, config, initScript, cliScript);
+            clientImageTag = generateClientImageHash(deployments, writer, target, buildExtraEnv, config, initScript, cliScript, channels);
             properties.setProperty("app-image-tag", clientImageTag);
         }
         createAppDeployment(writer, target, osClient, appName, actualEnv, ha, config, deploymentKind, clientImageTag);
@@ -613,14 +615,14 @@ public class OpenShiftSupport {
             Path cliScript,
             Map<String, String> buildExtraEnv,
             OpenShiftConfiguration config,
-            Map<String, String> serverImageBuildLabels, Properties properties) throws Exception {
+            Map<String, String> serverImageBuildLabels, Properties properties, List<Channel>channels) throws Exception {
         if (osClient == null) {
             generateDockerServerImage(writer, target, buildExtraEnv, config);
-            String serverImageTag = generateServerImageHash(writer, target, buildExtraEnv, config);
+            String serverImageTag = generateServerImageHash(writer, target, buildExtraEnv, config, channels);
             properties.setProperty("server-image-tag", serverImageTag);
             doAppImageBuild(null, writer, target, osClient, name, initScript, cliScript, config, serverImageTag);
         } else {
-            String serverImageName = doServerImageBuild(writer, target, osClient, buildExtraEnv, config, serverImageBuildLabels);
+            String serverImageName = doServerImageBuild(writer, target, osClient, buildExtraEnv, config, serverImageBuildLabels, channels);
             doAppImageBuild(serverImageName, writer, target, osClient, name, initScript, cliScript, config, null);
         }
     }
@@ -761,13 +763,16 @@ public class OpenShiftSupport {
 
     private static String generateServerImageHash(GlowMessageWriter writer, Path target,
             Map<String, String> buildExtraEnv,
-            OpenShiftConfiguration config) throws IOException, NoSuchAlgorithmException {
+            OpenShiftConfiguration config, List<Channel> channels) throws IOException, NoSuchAlgorithmException {
         // To compute a hash we need build time env variables
         StringBuilder contentBuilder = new StringBuilder();
         Path provisioning = target.resolve("galleon").resolve("provisioning.xml");
         contentBuilder.append(Files.readString(provisioning, Charset.forName("UTF-8")));
         for (Entry<String, String> entry : buildExtraEnv.entrySet()) {
             contentBuilder.append(entry.getKey()).append("=").append(entry.getValue());
+        }
+        if (channels != null && !channels.isEmpty()) {
+            contentBuilder.append(ChannelMapper.toYaml(channels));
         }
         MessageDigest digest = MessageDigest.getInstance("MD5");
         byte[] encodedhash = digest.digest(contentBuilder.toString().getBytes());
@@ -777,8 +782,8 @@ public class OpenShiftSupport {
 
     private static String generateClientImageHash(List<Path> deployments, GlowMessageWriter writer, Path target,
             Map<String, String> buildExtraEnv,
-            OpenShiftConfiguration config, Path initScript, Path cliScript) throws IOException, NoSuchAlgorithmException {
-        String server=generateServerImageHash(writer, target, buildExtraEnv, config);
+            OpenShiftConfiguration config, Path initScript, Path cliScript, List<Channel> channels) throws IOException, NoSuchAlgorithmException {
+        String server=generateServerImageHash(writer, target, buildExtraEnv, config, channels);
         StringBuilder contentBuilder = new StringBuilder();
         contentBuilder.append(server);
         for (Path p : deployments) {
@@ -803,9 +808,9 @@ public class OpenShiftSupport {
     private static String doServerImageBuild(GlowMessageWriter writer, Path target, OpenShiftClient osClient,
             Map<String, String> buildExtraEnv,
             OpenShiftConfiguration config,
-            Map<String, String> serverImageBuildLabels) throws Exception {
+            Map<String, String> serverImageBuildLabels, List<Channel> channels) throws Exception {
         Path provisioning = target.resolve("galleon").resolve("provisioning.xml");
-        String serverImageName = config.getServerImageNameRadical() + generateServerImageHash(writer, target, buildExtraEnv, config);
+        String serverImageName = config.getServerImageNameRadical() + generateServerImageHash(writer, target, buildExtraEnv, config, channels);
         ImageStream stream = new ImageStreamBuilder().withNewMetadata().withLabels(createCommonLabels(config)).withName(serverImageName).
                 endMetadata().withNewSpec().withLookupPolicy(new ImageLookupPolicy(Boolean.TRUE)).endSpec().build();
         // check if it exists
