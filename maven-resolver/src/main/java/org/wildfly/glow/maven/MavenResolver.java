@@ -40,7 +40,6 @@ import org.eclipse.aether.repository.RepositoryPolicy;
 import org.wildfly.channel.Channel;
 import org.wildfly.channel.ChannelManifestCoordinate;
 import org.wildfly.channel.Repository;
-import org.wildfly.glow.ChannelBuilder;
 
 /**
  *
@@ -77,16 +76,6 @@ public final class MavenResolver {
         MavenArtifactRepositoryManager resolver
                 = new MavenArtifactRepositoryManager(repoSystem, newMavenSession(repoSystem), getRHRemoteRepositories());
         return resolver;
-    }
-
-    public static ChannelBuilder newChannelBuilder() throws Exception {
-        RepositorySystem system = newRepositorySystem();
-        return new ChannelBuilderImpl(system, newMavenSession(system), getRemoteRepositories());
-    }
-
-    public static ChannelBuilder newRHChannelBuilder() throws Exception {
-        RepositorySystem system = newRepositorySystem();
-        return new ChannelBuilderImpl(system, newMavenSession(system), getRHRemoteRepositories());
     }
 
     public static List<RemoteRepository> getRemoteRepositories() {

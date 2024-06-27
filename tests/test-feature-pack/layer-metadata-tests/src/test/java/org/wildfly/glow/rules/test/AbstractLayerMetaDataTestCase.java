@@ -150,7 +150,7 @@ public class AbstractLayerMetaDataTestCase {
                 argumentsAugmenter.accept(argumentsBuilder);
             }
             Arguments arguments = argumentsBuilder.build();
-            try (ScanResults scanResults = GlowSession.scan(MavenResolver.newMavenResolver(), arguments, GlowMessageWriter.DEFAULT, MavenResolver.newChannelBuilder())) {
+            try (ScanResults scanResults = GlowSession.scan(MavenResolver.newMavenResolver(), arguments, GlowMessageWriter.DEFAULT)) {
 
                 Set<String> foundLayers = scanResults.getDiscoveredLayers().stream().map(l -> l.getName()).collect(Collectors.toSet());
                 Set<String> foundDecorators = scanResults.getDecorators().stream().map(l -> l.getName()).collect(Collectors.toSet());

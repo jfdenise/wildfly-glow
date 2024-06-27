@@ -338,7 +338,7 @@ public class ScanCommand extends AbstractCommand {
         Utils.addDisableDeployersFromConfig(configMap, disableDeployers);
         Utils.addEnableDeployersFromConfig(configMap, enableDeployers);
         builder.setIsCli(true);
-        ScanResults scanResults = GlowSession.scan(repoManager, builder.build(), GlowMessageWriter.DEFAULT, MavenResolver.newChannelBuilder());
+        ScanResults scanResults = GlowSession.scan(repoManager, builder.build(), GlowMessageWriter.DEFAULT);
         ConfigurationResolver configurationResolver = new CLIConfigurationResolver((provision.isPresent() && provision.get().equals(OPENSHIFT)),
                 disableDeployers, enableDeployers);
         scanResults.outputInformation(configurationResolver);

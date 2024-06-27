@@ -116,7 +116,7 @@ public class ShowConfigurationCommand extends AbstractCommand {
         } else {
             repoManager = MavenResolver.newMavenResolver();
         }
-        ProvisioningUtils.traverseProvisioning(consumer, context, provisioningXml.orElse(null), wildflyServerVersion.isEmpty(), vers, wildflyPreview.orElse(false), channels, repoManager, MavenResolver.newChannelBuilder());
+        ProvisioningUtils.traverseProvisioning(consumer, context, provisioningXml.orElse(null), wildflyServerVersion.isEmpty(), vers, wildflyPreview.orElse(false), channels, repoManager);
 
         return 0;
     }

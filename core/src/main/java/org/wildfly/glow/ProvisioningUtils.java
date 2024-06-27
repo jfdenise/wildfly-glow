@@ -16,8 +16,6 @@
  */
 package org.wildfly.glow;
 
-import java.net.URL;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
@@ -32,9 +30,7 @@ import org.jboss.galleon.universe.UniverseResolver;
 import org.jboss.galleon.universe.maven.repo.MavenRepoManager;
 import org.jboss.galleon.util.IoUtils;
 import org.wildfly.channel.Channel;
-import org.wildfly.channel.ChannelManifestCoordinate;
 import static org.wildfly.glow.GlowSession.OFFLINE_CONTENT;
-import static org.wildfly.glow.GlowSession.OFFLINE_ZIP;
 
 /**
  *
@@ -49,24 +45,10 @@ public class ProvisioningUtils {
     }
 
     public static void traverseProvisioning(ProvisioningConsumer consumer,
-            String executionContext, Path provisioningXML, boolean isLatest, String wildflyServerVersion, boolean wildflyPreview, List<Channel> channels, MavenRepoManager resolver, ChannelBuilder channelBuilder) throws Exception {
-        MavenRepoManager activeResolver = resolver;
-        if (!Files.exists(OFFLINE_ZIP)) {
-            if (channels.isEmpty()) {
-                if (provisioningXML == null) {
-                    URL manifestURL = FeaturePacks.getManifest(wildflyServerVersion,
-                            executionContext, wildflyPreview);
-                    if (manifestURL != null) {
-                        ChannelManifestCoordinate manifest = new ChannelManifestCoordinate(manifestURL);
-                        channels.add(channelBuilder.buildChannel(manifest));
-                        activeResolver = channelBuilder.buildChannelRepoManager(channels);
-                    }
-                }
-            }
-        }
-        UniverseResolver universeResolver = UniverseResolver.builder().addArtifactResolver(activeResolver).build();
+            String executionContext, Path provisioningXML, boolean isLatest, String wildflyServerVersion, boolean wildflyPreview, List<Channel> channels, MavenRepoManager resolver) throws Exception {
+        UniverseResolver universeResolver = UniverseResolver.builder().addArtifactResolver(resolver).build();
         GalleonBuilder provider = new GalleonBuilder();
-        provider.addArtifactResolver(activeResolver);
+        provider.addArtifactResolver(resolver);
         String vers = wildflyServerVersion != null ? wildflyServerVersion : FeaturePacks.getLatestVersion();
         Provisioning provisioning = null;
         try {

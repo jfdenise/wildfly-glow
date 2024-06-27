@@ -57,7 +57,7 @@ public class TestPackager {
         this.archivePath = path;
 
         Arguments arguments = Arguments.scanBuilder().setBinaries(Collections.singletonList(archivePath)).build();
-        scanResults = GlowSession.scan(MavenResolver.newMavenResolver(), arguments, GlowMessageWriter.DEFAULT, MavenResolver.newChannelBuilder());
+        scanResults = GlowSession.scan(MavenResolver.newMavenResolver(), arguments, GlowMessageWriter.DEFAULT);
         return scanResults;
     }
 

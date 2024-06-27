@@ -70,8 +70,6 @@ import org.jboss.galleon.api.config.GalleonProvisioningConfig;
 import org.jboss.galleon.universe.FeaturePackLocation;
 import org.jboss.galleon.universe.maven.repo.MavenRepoManager;
 import org.wildfly.channel.Channel;
-import org.wildfly.channel.ChannelManifestCoordinate;
-import org.wildfly.glow.ChannelBuilder;
 import org.wildfly.glow.ScanArguments;
 import org.wildfly.glow.error.IdentifiedError;
 import static org.wildfly.glow.plugin.arquillian.GlowArquillianDeploymentExporter.TEST_CLASSPATH;
@@ -353,19 +351,8 @@ public class ScanMojo extends AbstractMojo {
             }
 
             Arguments arguments = argumentsBuilder.build();
-            ChannelBuilder channelBuilder = new ChannelBuilder() {
-                @Override
-                public org.wildfly.channel.Channel buildChannel(ChannelManifestCoordinate coordinates) throws Exception {
-                    return ChannelConfiguration.toChannel(repositories, coordinates);
-                }
-
-                @Override
-                public MavenRepoManager buildChannelRepoManager(List<org.wildfly.channel.Channel> channel) throws Exception {
-                    return new ChannelMavenArtifactRepositoryManager(channel, repoSystem, repoSession, repositories);
-                }
-            };
             try (ScanResults results = GlowSession.scan(artifactResolver,
-                    arguments, writer, channelBuilder)) {
+                    arguments, writer)) {
                 boolean skipTests = Boolean.getBoolean("maven.test.skip") || Boolean.getBoolean("skipTests");
                 if (skipTests) {
                     getLog().warn("Tests are disabled, not checking for expected discovered layers.");

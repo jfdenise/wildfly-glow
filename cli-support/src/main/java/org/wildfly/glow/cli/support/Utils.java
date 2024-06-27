@@ -77,7 +77,7 @@ public class Utils {
             repoManager = MavenResolver.newMavenResolver();
         }
         ProvisioningUtils.traverseProvisioning(consumer, context, provisioningXml, isLatest, serverVersion,
-                isPreview, channels, repoManager, MavenResolver.newChannelBuilder());
+                isPreview, channels, repoManager);
     }
 
     public static void setSystemProperties(Set<String> systemProperties) throws Exception {

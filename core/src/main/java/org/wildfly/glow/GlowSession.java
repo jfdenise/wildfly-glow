@@ -31,7 +31,6 @@ import org.wildfly.glow.windup.WindupSupport;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -64,7 +63,6 @@ import org.jboss.galleon.api.config.GalleonProvisioningConfig;
 import org.jboss.galleon.universe.UniverseResolver;
 import org.jboss.galleon.universe.maven.MavenArtifact;
 import org.wildfly.channel.Channel;
-import org.wildfly.channel.ChannelManifestCoordinate;
 import org.wildfly.channel.ChannelMapper;
 import static org.wildfly.glow.error.ErrorLevel.ERROR;
 import org.wildfly.plugin.tools.bootablejar.BootableJarSupport;
@@ -85,33 +83,23 @@ public class GlowSession {
     private final Arguments arguments;
     private final GlowMessageWriter writer;
     private final List<Channel> channels = new ArrayList<>();
-    private GlowSession(MavenRepoManager resolver, Arguments arguments, GlowMessageWriter writer, ChannelBuilder channelBuilder) throws Exception {
+    private GlowSession(MavenRepoManager resolver, Arguments arguments, GlowMessageWriter writer) throws Exception {
         this.arguments = arguments;
         this.writer = writer;
         MavenRepoManager repoManager = resolver;
         if (!Files.exists(OFFLINE_ZIP)) {
-            if (arguments.getChannels() == null) {
-                if (arguments.getProvisioningXML() == null) {
-                    URL manifestURL = FeaturePacks.getManifest(arguments.getVersion(),
-                            arguments.isCloud() ? Arguments.CLOUD_EXECUTION_CONTEXT : Arguments.BARE_METAL_EXECUTION_CONTEXT, arguments.isTechPreview());
-                    if (manifestURL != null) {
-                        ChannelManifestCoordinate manifest = new ChannelManifestCoordinate(manifestURL);
-                        channels.add(channelBuilder.buildChannel(manifest));
-                        repoManager = channelBuilder.buildChannelRepoManager(channels);
-                    }
-                }
-            } else {
+            if (arguments.getChannels() != null) {
                 channels.addAll(arguments.getChannels());
             }
         }
         this.resolver = repoManager;
     }
 
-    public static void goOffline(MavenRepoManager resolver, GoOfflineArguments arguments, GlowMessageWriter writer, ChannelBuilder channelBuilder) throws Exception {
+    public static void goOffline(MavenRepoManager resolver, GoOfflineArguments arguments, GlowMessageWriter writer) throws Exception {
         if (!(arguments instanceof Arguments)) {
             throw new IllegalArgumentException("Please use the API to create the GoOfflineArguments instance");
         }
-        GlowSession session = new GlowSession(resolver, (Arguments) arguments, writer, channelBuilder);
+        GlowSession session = new GlowSession(resolver, (Arguments) arguments, writer);
         session.goOffline();
     }
 
@@ -146,11 +134,11 @@ public class GlowSession {
         IoUtils.recursiveDelete(OFFLINE_CONTENT);
     }
 
-    public static ScanResults scan(MavenRepoManager resolver, ScanArguments arguments, GlowMessageWriter writer, ChannelBuilder channelBuilder) throws Exception {
+    public static ScanResults scan(MavenRepoManager resolver, ScanArguments arguments, GlowMessageWriter writer) throws Exception {
         if (!(arguments instanceof Arguments)) {
             throw new IllegalArgumentException("Please use the API to create the ScanArguments instance");
         }
-        GlowSession session = new GlowSession(resolver, (Arguments) arguments, writer, channelBuilder);
+        GlowSession session = new GlowSession(resolver, (Arguments) arguments, writer);
         return session.scan();
     }
 
