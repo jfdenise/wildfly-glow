@@ -141,7 +141,11 @@ public class KeycloakDeployer implements Deployer {
             retEnv.put(OIDC_USER_PASSWORD_ENV, KEYCLOAK_DEMO_PASSWORD);
             retEnv.put(OIDC_HOSTNAME_HTTPS_ENV, appHost);
         }
-        writer.info("Keycloak server has been deployed");
+        if (dryRun) {
+            writer.info("Resources for Keycloak server have been generated");
+        } else {
+            writer.info("Keycloak server has been deployed");
+        }
         return retEnv;
     }
 

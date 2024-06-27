@@ -135,7 +135,11 @@ public class AMQDeployer implements Deployer {
             osClient.services().resource(service).createOr(NonDeletingOperation::update);
         }
         Utils.persistResource(OpenShiftSupport.getDeployersDirectory(target), service, REMOTE_BROKER_NAME + "-service.yaml");
-        writer.info("AMQ Messaging Broker has been deployed");
+        if (dryRun) {
+            writer.info("Resources for AMQ Messaging Broker have been generated");
+        } else {
+            writer.info("AMQ Messaging Broker has been deployed");
+        }
         return REMOTE_BROKER_APP_MAP;
     }
 

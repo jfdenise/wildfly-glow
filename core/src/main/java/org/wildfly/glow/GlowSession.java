@@ -654,7 +654,7 @@ public class GlowSession {
             }
         }
         if (!OutputFormat.PROVISIONING_XML.equals(arguments.getOutput()) &&
-            !OutputFormat.OPENSHIFT.equals(arguments.getOutput()) && !OutputFormat.OPENSHIFT_RESOURCES.equals(arguments.getOutput())) {
+            !OutputFormat.OPENSHIFT.equals(arguments.getOutput())) {
             Path generatedArtifact = provisionServer(arguments.getBinaries(),
                     scanResults.getProvisioningConfig(), resolver, arguments.getOutput(),
                     arguments.isCloud(), target);
@@ -681,7 +681,7 @@ public class GlowSession {
                 }
             }
         } else {
-            if (OutputFormat.OPENSHIFT.equals(arguments.getOutput()) || OutputFormat.OPENSHIFT_RESOURCES.equals(arguments.getOutput())) {
+            if (OutputFormat.OPENSHIFT.equals(arguments.getOutput())) {
                 target = target.resolve("galleon");
             }
             Files.createDirectories(target);

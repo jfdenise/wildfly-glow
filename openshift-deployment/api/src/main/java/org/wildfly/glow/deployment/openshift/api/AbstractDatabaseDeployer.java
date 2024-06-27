@@ -148,7 +148,11 @@ public class AbstractDatabaseDeployer implements Deployer {
         Map<String, String> ret = new HashMap<>();
         ret.putAll(getExistingEnv(env));
         ret.putAll(APP_MAP);
-        writer.info(dbName + " server has been deployed");
+        if(dryRun) {
+            writer.info("Resources for " + dbName + " have been generated");
+        } else {
+            writer.info(dbName + " server has been deployed");
+        }
         return ret;
     }
 
