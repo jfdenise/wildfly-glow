@@ -77,7 +77,7 @@ public class ConfiguredChannels {
             }
             return rep;
         };
-        VersionResolverFactory factory = new VersionResolverFactory(system, session, mapper);
+        VersionResolverFactory factory = new VersionResolverFactory(system, session, null, mapper);
         return new ChannelSession(channels, factory);
     }
 }

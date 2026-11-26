@@ -45,6 +45,16 @@ WildFly Glow does more than identifying Galleon Feature-packs and Layers.
 
 WildFly Glow CLI allows you to provision a WildFly server, a WildFly Bootable JAR, produce a Docker image and deploy your application to OpenShift.
 
+##### Bootable JAR SBOM
+
+When provisioning a WildFly Bootable JAR, WildFly Glow generates a link:https://cyclonedx.org/[CycloneDX] SBOM that describes the whole Bootable JAR: the WildFly server and the scanned deployments.
+The SBOM is embedded in the Bootable JAR (`META-INF/sbom/sbom.cdx.json.gz`) and a copy, `sbom.cdx.json`, is written next to the Bootable JAR in the output directory.
+
+* The Bootable JAR is the main component of the SBOM, identified by a generic package URL, e.g. `pkg:generic/kitchensink.jar@<server version>`.
+* The WildFly server is a component the Bootable JAR depends on.
+* Each scanned deployment is a component (e.g. `pkg:generic/kitchensink.war`) that has a SHA-256 hash. When a deployment embeds its own SBOM (a `META-INF/sbom/*.cdx.json` or `META-INF/sbom/*.cdx.xml` file), the components of this SBOM are nested under the deployment component.
+* The tool that built the Bootable JAR is WildFly Plugin Tools, it is recorded in the SBOM metadata.
+
 ##### OpenShift provisioning
 
 A good way to start with OpenShift is by using the link:https://developers.redhat.com/developer-sandbox[OpenShift Sandbox]. 

@@ -24,7 +24,7 @@
     </licenses>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.release>11</maven.compiler.release>
+        <maven.compiler.release>17</maven.compiler.release>
         <maven.compiler.source>${maven.compiler.release}</maven.compiler.source>
         <maven.compiler.target>${maven.compiler.release}</maven.compiler.target>
         <!-- Used to override the release bytecode for compiling tests. This allows testing on newer bytecode. -->
@@ -34,16 +34,16 @@
         <version.info.picocli>4.7.5</version.info.picocli>
         <version.org.ow2.asm>9.8</version.org.ow2.asm>
         <version.biz.aQute.bnd>6.4.0</version.biz.aQute.bnd>
-        <version.org.wildfly.plugins.wildfly-plugin-tools>1.2.3.Final</version.org.wildfly.plugins.wildfly-plugin-tools>
+        <version.org.wildfly.plugins.wildfly-plugin-tools>2.1.2.Final-SNAPSHOT</version.org.wildfly.plugins.wildfly-plugin-tools>
         <version.org.wildfly.common.wildfly-common>1.7.0.Final</version.org.wildfly.common.wildfly-common>
         <version.com.puppycrawl.tools.checkstyle>8.18</version.com.puppycrawl.tools.checkstyle>
-        <version.com.fasterxml.jackson.core>2.17.2</version.com.fasterxml.jackson.core>
+        <version.com.fasterxml.jackson.core>2.22.4</version.com.fasterxml.jackson.core>
         <version.io.smallrye.jandex>3.1.6</version.io.smallrye.jandex>
         <version.org.apache.maven>3.8.6</version.org.apache.maven>
         <version.org.apache.maven.checkstyle>3.0.0</version.org.apache.maven.checkstyle>
         <version.org.apache.maven.resolver>1.6.3</version.org.apache.maven.resolver>
         <version.org.jboss.galleon>7.0.5.Final</version.org.jboss.galleon>
-        <version.org.wildfly.channel>1.2.1.Final</version.org.wildfly.channel>
+        <version.org.wildfly.channel>1.4.0.Final</version.org.wildfly.channel>
         <version.org.jboss.logging.slf4j-jboss-logging>1.2.1.Final</version.org.jboss.logging.slf4j-jboss-logging>
         <version.org.yaml.snakeyaml>2.2</version.org.yaml.snakeyaml>
         <version.org.apache.commons>3.12.0</version.org.apache.commons>
@@ -69,7 +69,7 @@
         <galleon.fork.embedded>true</galleon.fork.embedded>
 
         <!-- Test dependency versions -->
-        <version.org.wildfly.galleon-plugins>7.3.1.Final</version.org.wildfly.galleon-plugins>
+        <version.org.wildfly.galleon-plugins>8.2.4.Final-SNAPSHOT</version.org.wildfly.galleon-plugins>
         <version.jakarta.annotation.jakarta-annotation-api>2.1.1</version.jakarta.annotation.jakarta-annotation-api>
         <version.jakarta.ejb.jakarta-ejb-api>4.0.1</version.jakarta.ejb.jakarta-ejb-api>
         <version.jakarta.enterprise.cdi-api>4.0.1</version.jakarta.enterprise.cdi-api>
@@ -364,10 +364,10 @@
                 <groupId>org.wildfly.plugins</groupId>
                 <artifactId>wildfly-plugin-tools</artifactId>
                 <version>${version.org.wildfly.plugins.wildfly-plugin-tools}</version>
-                <!-- Excluding all. WildFly core dependencies can conflict when scanning with the Arquillian Maven plugin -->
+                <!-- WildFly core dependencies can conflict when scanning with the Arquillian Maven plugin -->
                 <exclusions>
                     <exclusion>
-                        <groupId>*</groupId>
+                        <groupId>org.wildfly.core</groupId>
                         <artifactId>*</artifactId>
                     </exclusion>
                 </exclusions>

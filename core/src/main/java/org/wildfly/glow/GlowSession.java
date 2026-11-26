@@ -69,6 +69,7 @@ import org.wildfly.channel.ChannelMapper;
 import static org.wildfly.glow.FeaturePacks.URL_PROPERTY;
 import static org.wildfly.glow.error.ErrorLevel.ERROR;
 import org.wildfly.plugin.tools.bootablejar.BootableJarSupport;
+import org.wildfly.plugin.tools.bootablejar.SBOMArtifact;
 
 /**
  *
@@ -932,6 +933,12 @@ public class GlowSession {
                         BootableJarSupport.BOOTABLE_SUFFIX + ".jar");
                 ret = targetJarFile;
                 Files.deleteIfExists(targetJarFile);
+                // The deployments have no Maven coordinates, they are described with generic purls (no version).
+                Map<String, SBOMArtifact> deployments = new LinkedHashMap<>();
+                for (Path binary : binaries) {
+                    String fileName = binary.getFileName().toString();
+                    deployments.put(fileName, SBOMArtifact.generic(fileName, null, binary.toAbsolutePath()));
+                }
                 BootableJarSupport.packageBootableJar(targetJarFile, originalTarget.toAbsolutePath(),
                         activeConfig, tmpDir.toAbsolutePath(),
                         resolver,
@@ -962,7 +969,9 @@ public class GlowSession {
                     public void close() throws Exception {
                     }
 
-                },  MINIMAL_STABILITY_LEVEL);
+                },  MINIMAL_STABILITY_LEVEL, deployments,
+                        SBOMArtifact.generic(bootableJarName + (arguments.getServerVariant() == null ? "" : "-" + arguments.getServerVariant()) + ".jar", vers),
+                        true);
             }
         } finally {
             if (tmpDir != null) {

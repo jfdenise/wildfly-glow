@@ -75,7 +75,7 @@ public class ChannelMavenArtifactRepositoryManager implements MavenRepoManager, 
             }
             return rep;
         };
-        VersionResolverFactory factory = new VersionResolverFactory(system, session, mapper);
+        VersionResolverFactory factory = new VersionResolverFactory(system, session, null, mapper);
         channelSession = new ChannelSession(channels, factory);
         this.system = system;
     }

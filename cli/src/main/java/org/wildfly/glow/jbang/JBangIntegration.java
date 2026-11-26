@@ -53,7 +53,7 @@ public class JBangIntegration {
     private static final String WEB_INF = "WEB-INF";
 
     private static void extractJar(Path jar, Path destDir) throws IOException {
-        try (FileSystem fs = FileSystems.newFileSystem(jar, null)) {
+        try (FileSystem fs = FileSystems.newFileSystem(jar, (ClassLoader) null)) {
             Path root = fs.getPath("/");
 
             // Walk the tree inside the JAR

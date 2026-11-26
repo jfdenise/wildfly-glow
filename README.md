@@ -53,7 +53,7 @@ Include the `<discover-provisioning-info/>` element in the plugin configuration.
 
 # Steps to build the WildFly Glow command line
 
-1) Make sure to use JDK11 as the minimal version.
+1) Make sure to use JDK17 as the minimal version.
 2) Build WildFly Glow: `mvn clean install`
 
 # Running CLI tests
@@ -62,7 +62,7 @@ Include the `<discover-provisioning-info/>` element in the plugin configuration.
 
 # Steps to build the WildFly Glow command line to be used with SNAPSHOT versions of WildFly and SNAPSHOT versions of extra Galleon Feature-packs
 
-1) Make sure to use JDK11 as the minimal version.
+1) Make sure to use JDK17 as the minimal version.
 2) Build [WildFly](https://github.com/wildfly/wildfly) main branch and have the built artifacts available in your local Maven cache.
 3) Build keycloak: https://github.com/jfdenise/keycloak/tree/layers_metadata_final (`mvn clean install -DskipTests -Pdistribution` to build the required org.keycloak:keycloak-saml-adapter-galleon-pack artifact)
 4) Build MyFaces Feature-pack: https://github.com/jfdenise/wildfly-myfaces-feature-pack/tree/layers_metadata
